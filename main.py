@@ -45,7 +45,7 @@ def calc_gram_matrix(x):
 	_, c, h, w = x.shape
 	x = x.view(c, h * w)
 	x_t = x.transpose(0, 1)
-	return torch.matmul(x, x_t)
+	return torch.matmul(x, x_t) / (h * w)
 
 
 def get_feature(x):
@@ -61,6 +61,16 @@ def get_feature(x):
 	return content_feature, style_feature
 
 
+total_variation_weight = 1e-3
+
+
+def total_variation_loss(x):
+	# 1 x C x H x W
+	# 1 x C x (H-1) x (W-1)
+	return torch.sum(torch.abs(x[:, :, :, :-1] - x[:, :, :, 1:])) + torch.sum(
+	    torch.abs(x[:, :, :-1, :] - x[:, :, 1:, :]))
+
+
 def calc_loss(x, content_hat, style_hat):
 	content_feature, style_feature = get_feature(x)
 	content_loss = torch.zeros(1).to(device)
@@ -71,7 +81,9 @@ def calc_loss(x, content_hat, style_hat):
 	for i in style_feature_args.keys():
 		style_loss = style_loss + style_feature_args[i] * torch.mean(
 		    (style_feature[i] - style_hat[i].detach())**2)
-	return content_loss + style_loss
+
+	return content_loss + style_loss + total_variation_weight * total_variation_loss(
+	    x)
 
 
 mean = torch.tensor([0.485, 0.456, 0.406])
@@ -139,13 +151,15 @@ _, style_hat = get_feature(style_image)
 
 output_image = content_image.clone().requires_grad_(True).to(device)
 
+# show_save_img(deprocess_image(output_image))
+
 max_iter = 20
 
 optimizer = torch.optim.LBFGS([output_image], max_iter=max_iter)
 
 max_step = 2000
 
-torch.autograd.set_detect_anomaly(True)
+# torch.autograd.set_detect_anomaly(True)
 
 for step in tqdm(range(max_step)):
 
@@ -156,5 +170,5 @@ for step in tqdm(range(max_step)):
 		return loss
 
 	optimizer.step(closure)
-
-	show_save_img(deprocess_image(output_image), path='output_latest.jpg')
+	if step % 10 == 0:
+		show_save_img(deprocess_image(output_image), path='output_latest.jpg')
