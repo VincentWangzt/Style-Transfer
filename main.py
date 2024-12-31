@@ -1,5 +1,6 @@
 import torch
 from torch import hub
+import torch.nn.functional as F
 from torchvision import models, transforms
 from PIL import Image
 import matplotlib.pyplot as plt
@@ -36,6 +37,8 @@ feature = feature[:(
 for mod in feature:
 	if hasattr(mod, 'inplace'):
 		mod.inplace = False
+for param in feature.parameters():
+	param.requires_grad = False
 feature = feature.to(device)
 feature.eval()
 
@@ -61,29 +64,48 @@ def get_feature(x):
 	return content_feature, style_feature
 
 
-total_variation_weight = 1e-3
+total_variation_weight = 0
 
 
 def total_variation_loss(x):
 	# 1 x C x H x W
-	# 1 x C x (H-1) x (W-1)
 	return torch.sum(torch.abs(x[:, :, :, :-1] - x[:, :, :, 1:])) + torch.sum(
 	    torch.abs(x[:, :, :-1, :] - x[:, :, 1:, :]))
 
 
-def calc_loss(x, content_hat, style_hat):
+laplacian_filter = torch.tensor([[0, 1., 0], [1, -4, 1], [0, 1, 0]]).to(device)
+laplacian_weight = 0
+
+
+def get_laplacian(x, p=4):
+	# 1 x 3 x H x W
+	x = F.avg_pool2d(x, p)
+	x = torch.sum(x, axis=1)
+	x = F.conv2d(x, laplacian_filter.view(1, 1, 3, 3))
+	return x
+
+
+def calc_loss(x, content_hat, style_hat, lap_hat):
+	# tx = x.clone().detach()
 	content_feature, style_feature = get_feature(x)
+	lap_feature = get_laplacian(x)
+	# assert x.eq(tx).all().item()
+
 	content_loss = torch.zeros(1).to(device)
 	for i in content_feature_args.keys():
 		content_loss = content_loss + content_feature_args[i] * torch.mean(
 		    (content_feature[i] - content_hat[i].detach())**2)
+
 	style_loss = torch.zeros(1).to(device)
 	for i in style_feature_args.keys():
 		style_loss = style_loss + style_feature_args[i] * torch.mean(
 		    (style_feature[i] - style_hat[i].detach())**2)
 
-	return content_loss + style_loss + total_variation_weight * total_variation_loss(
-	    x)
+	tv_loss = total_variation_weight * total_variation_loss(x)
+
+	lap_loss = torch.sum(lap_feature - lap_hat.detach()) * laplacian_weight
+
+	return content_loss + style_loss + tv_loss + lap_loss
 
 
 mean = torch.tensor([0.485, 0.456, 0.406])
@@ -96,7 +118,7 @@ def preprocess_image(image):
 	     transforms.Normalize(mean=mean, std=std)])
 	image = transform(image)
 	image = image.unsqueeze(0)
-	image = image.to(device)
+	image = image.to(device).detach()
 	return image
 
 
@@ -128,8 +150,8 @@ if not os.path.exists(OUTPUT_PATH):
 def show_save_img(image, path=None):
 	if path:
 		image.save('./outputs/' + path)
-	# plt.imshow(image)
-	# plt.show(block=False)
+	plt.imshow(image)
+	plt.show(block=False)
 
 
 STYLE_IMAGE_PATH = './images/inputs/style/'
@@ -148,27 +170,29 @@ show_save_img(deprocess_image(style_image), path='style.jpg')
 
 content_hat, _ = get_feature(content_image)
 _, style_hat = get_feature(style_image)
+lap_hat = get_laplacian(content_image)
 
 output_image = content_image.clone().requires_grad_(True).to(device)
-
-# show_save_img(deprocess_image(output_image))
 
 max_iter = 20
 
 optimizer = torch.optim.LBFGS([output_image], max_iter=max_iter)
+# optimizer = torch.optim.Adam([output_image], lr=1e-3)
 
 max_step = 2000
-
-# torch.autograd.set_detect_anomaly(True)
 
 for step in tqdm(range(max_step)):
 
 	def closure():
 		optimizer.zero_grad()
-		loss = calc_loss(output_image, content_hat, style_hat)
+		loss = calc_loss(output_image, content_hat, style_hat, lap_hat)
 		loss.backward()
 		return loss
 
 	optimizer.step(closure)
+	# optimizer.zero_grad()
+	# loss = calc_loss(output_image, content_hat, style_hat, lap_hat)
+	# loss.backward()
+	# optimizer.step()
 	if step % 10 == 0:
 		show_save_img(deprocess_image(output_image), path='output_latest.jpg')
