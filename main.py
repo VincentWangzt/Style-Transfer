@@ -22,7 +22,7 @@ else:
 	print('Running on CPU')
 
 alpha = 1
-beta = 1e3
+beta = 1e4
 
 content_feature_args = {25: 1}
 f_tmp = alpha / sum(content_feature_args.values())
@@ -155,7 +155,9 @@ if not os.path.exists(OUTPUT_PATH):
 	os.makedirs(OUTPUT_PATH)
 
 
-def show_save_img(image, path=None):
+def show_save_img(image, path=None, shape=None):
+	if shape:
+		image = image.resize(shape, Image.Resampling.BICUBIC)
 	if path:
 		image.save('./outputs/' + path)
 	plt.imshow(image)
@@ -166,11 +168,15 @@ STYLE_IMAGE_PATH = './images/inputs/style/'
 
 CONTENT_IMAGE_PATH = './images/inputs/content/'
 
+STYLE_PATH = STYLE_IMAGE_PATH + 'starry_night.jpg'
+
+CONTENT_PATH = CONTENT_IMAGE_PATH + 'gatys-original.jpg'
+
 shape = (512, 512)
 
 _, style_image, content_image = load_image(
-    STYLE_IMAGE_PATH + 'starry_night.jpg',
-    CONTENT_IMAGE_PATH + 'gatys-original.jpg',
+    STYLE_PATH,
+    CONTENT_PATH,
     shape=shape)
 
 show_save_img(deprocess_image(content_image), path='content.jpg')
@@ -179,6 +185,9 @@ show_save_img(deprocess_image(style_image), path='style.jpg')
 content_hat, _ = get_feature(content_image)
 _, style_hat = get_feature(style_image)
 lap_hat = get_laplacian(content_image)
+
+temp_ = Image.open(CONTENT_PATH)
+content_shape = temp_.size
 
 
 def get_init_image(mode='content'):
@@ -198,19 +207,28 @@ optimizer = torch.optim.LBFGS([output_image], max_iter=max_iter)
 # optimizer = torch.optim.Adam([output_image], lr=1e-3)
 
 max_step = 1000
+if __name__ == '__main__':
+	import argparse
+	
+	parser = argparse.ArgumentParser(description='The configs')
+	parser.add_argument('--remain_shape', type=bool, default=True)
+	args = parser.parse_args()
 
-for step in tqdm(range(max_step)):
+	for step in tqdm(range(max_step)):
 
-	def closure():
-		optimizer.zero_grad()
-		loss = calc_loss(output_image, content_hat, style_hat, lap_hat)
-		loss.backward()
-		return loss
+		def closure():
+			optimizer.zero_grad()
+			loss = calc_loss(output_image, content_hat, style_hat, lap_hat)
+			loss.backward()
+			return loss
 
-	optimizer.step(closure)
-	# optimizer.zero_grad()
-	# loss = calc_loss(output_image, content_hat, style_hat, lap_hat)
-	# loss.backward()
-	# optimizer.step()
-	if step % 10 == 0:
-		show_save_img(deprocess_image(output_image), path='output_latest.jpg')
+		optimizer.step(closure)
+		# optimizer.zero_grad()
+		# loss = calc_loss(output_image, content_hat, style_hat, lap_hat)
+		# loss.backward()
+		# optimizer.step()
+		if step % 10 == 0:
+			if args.remain_shape:
+				show_save_img(deprocess_image(output_image), path='output_latest.jpg', shape= content_shape)
+			else:
+				show_save_img(deprocess_image(output_image), path='output_latest.jpg')
