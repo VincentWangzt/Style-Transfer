@@ -20,7 +20,7 @@ else:
 	print('Running on CPU')
 
 alpha = 1
-beta = 1e1
+beta = 1e3
 
 content_feature_args = {25: 1}
 f_tmp = alpha / sum(content_feature_args.values())
@@ -30,7 +30,7 @@ style_feature_args = {0: 1, 5: 1, 10: 1, 19: 1, 28: 1}
 f_tmp = beta / sum(style_feature_args.values())
 style_feature_args = {k: v * f_tmp for k, v in style_feature_args.items()}
 
-feature = models.vgg19(weights=models.VGG19_Weights.DEFAULT).features
+feature = models.vgg19(weights=models.VGG19_Weights.DEFAULT).features.eval()
 feature = feature[:(
     max(*list(content_feature_args.keys()), *list(style_feature_args.keys())) +
     1)]
@@ -39,6 +39,7 @@ for mod in feature:
 		mod.inplace = False
 for param in feature.parameters():
 	param.requires_grad = False
+
 feature = feature.to(device)
 feature.eval()
 
@@ -64,7 +65,7 @@ def get_feature(x):
 	return content_feature, style_feature
 
 
-total_variation_weight = 0
+total_variation_weight = 1e-4
 
 
 def total_variation_loss(x):
@@ -112,10 +113,12 @@ mean = torch.tensor([0.485, 0.456, 0.406])
 std = torch.tensor([0.229, 0.224, 0.225])
 
 
-def preprocess_image(image):
-	transform = transforms.Compose(
-	    [transforms.ToTensor(),
-	     transforms.Normalize(mean=mean, std=std)])
+def preprocess_image(image, shape=None):
+	transform = transforms.Compose([
+	    # transforms.Resize(shape if shape else image.size),
+	    transforms.ToTensor(),
+	    transforms.Normalize(mean=mean, std=std)
+	])
 	image = transform(image)
 	image = image.unsqueeze(0)
 	image = image.to(device).detach()
@@ -123,9 +126,10 @@ def preprocess_image(image):
 
 
 def deprocess_image(image):
-	image = image.clone().detach().squeeze()
-	image = transforms.Normalize(-mean / std, 1 / std)(image)
-	image = transforms.ToPILImage()(image)
+	image = image.clone().detach().squeeze().to(std.device)
+	# image = transforms.Normalize(-mean / std, 1 / std)(image)
+	image = torch.clamp(image.permute(1, 2, 0) * std + mean, 0, 1)
+	image = transforms.ToPILImage()(image.permute(2, 0, 1))
 	return image
 
 
