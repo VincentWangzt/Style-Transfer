@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import os
 
+# TODO: visualize losses
+
 MODEL_DIR = './models/'
 hub.set_dir(MODEL_DIR)
 if not os.path.exists(MODEL_DIR):
@@ -65,24 +67,25 @@ def get_feature(x):
 	return content_feature, style_feature
 
 
-total_variation_weight = 1e-4
+total_variation_weight = 1e1
 
 
 def total_variation_loss(x):
 	# 1 x C x H x W
-	return torch.sum(torch.abs(x[:, :, :, :-1] - x[:, :, :, 1:])) + torch.sum(
-	    torch.abs(x[:, :, :-1, :] - x[:, :, 1:, :]))
+	return 0.5 * torch.mean(
+	    torch.abs(x[:, :, :, :-1] - x[:, :, :, 1:])) + 0.5 * torch.mean(
+	        torch.abs(x[:, :, :-1, :] - x[:, :, 1:, :]))
 
 
 laplacian_filter = torch.tensor([[0, 1., 0], [1, -4, 1], [0, 1, 0]]).to(device)
-laplacian_weight = 0
+laplacian_weight = 1e2
 
 
 def get_laplacian(x, p=4):
 	# 1 x 3 x H x W
-	x = F.avg_pool2d(x, p)
 	x = torch.sum(x, axis=1)
 	x = F.conv2d(x, laplacian_filter.view(1, 1, 3, 3))
+	x = F.avg_pool2d(x, p).squeeze()
 	return x
 
 
@@ -104,7 +107,8 @@ def calc_loss(x, content_hat, style_hat, lap_hat):
 
 	tv_loss = total_variation_weight * total_variation_loss(x)
 
-	lap_loss = torch.sum(lap_feature - lap_hat.detach()) * laplacian_weight
+	lap_loss = torch.sum(
+	    (lap_feature - lap_hat.detach())**2) * laplacian_weight
 
 	return content_loss + style_loss + tv_loss + lap_loss
 
@@ -162,11 +166,11 @@ STYLE_IMAGE_PATH = './images/inputs/style/'
 
 CONTENT_IMAGE_PATH = './images/inputs/content/'
 
-shape = (512, 256)
+shape = (512, 512)
 
 _, style_image, content_image = load_image(
     STYLE_IMAGE_PATH + 'starry_night.jpg',
-    CONTENT_IMAGE_PATH + 'blue-moon-lake.jpg',
+    CONTENT_IMAGE_PATH + 'gatys-original.jpg',
     shape=shape)
 
 show_save_img(deprocess_image(content_image), path='content.jpg')
@@ -176,14 +180,24 @@ content_hat, _ = get_feature(content_image)
 _, style_hat = get_feature(style_image)
 lap_hat = get_laplacian(content_image)
 
-output_image = content_image.clone().requires_grad_(True).to(device)
+
+def get_init_image(mode='content'):
+	if mode == 'content':
+		return content_image.clone().requires_grad_(True).to(device)
+	elif mode == 'random':
+		return torch.randn_like(content_image).requires_grad_(True).to(device)
+	else:
+		raise ValueError('Invalid mode')
+
+
+output_image = get_init_image('content')
 
 max_iter = 20
 
 optimizer = torch.optim.LBFGS([output_image], max_iter=max_iter)
 # optimizer = torch.optim.Adam([output_image], lr=1e-3)
 
-max_step = 2000
+max_step = 1000
 
 for step in tqdm(range(max_step)):
 
