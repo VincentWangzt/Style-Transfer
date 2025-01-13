@@ -22,11 +22,11 @@ import random
 alpha = 1  #content
 beta = 4  #style
 
-content_feature_args = {20: 1}
+content_feature_args = {30: 1}
 f_tmp = alpha / sum(content_feature_args.values())
 content_feature_args = {k: v * f_tmp for k, v in content_feature_args.items()}
 
-style_feature_args = {1: 1, 6: 1, 11: 1, 20: 1}
+style_feature_args = {3: 1, 10: 1, 17: 1, 30: 1}
 f_tmp = beta / sum(style_feature_args.values())
 style_feature_args = {k: v * f_tmp for k, v in style_feature_args.items()}
 
@@ -34,6 +34,7 @@ style_feature_args = {k: v * f_tmp for k, v in style_feature_args.items()}
 class Encoder(nn.Module):
 
 	def __init__(self):
+		super(Encoder, self).__init__()
 		self.features = nn.Sequential(
 		    nn.Conv2d(3, 3, (1, 1)),
 		    nn.ReflectionPad2d((1, 1, 1, 1)),
@@ -90,8 +91,7 @@ class Encoder(nn.Module):
 		    nn.ReLU()  # relu5-4
 		)
 		self.features.load_state_dict(
-		    torch.load("./models/vgg_normalised.pth",
-		               weights_only=True,
+		    torch.load("./models/checkpoints/vgg_normalised.pth",
 		               map_location='cpu'))
 
 
@@ -273,7 +273,7 @@ def get_feature(x, feature=pretrained_vgg_features):
 			style_feature[i] = x
 		if i in content_feature_args.keys():
 			content_feature[i] = x
-	return content_feature[20], style_feature
+	return content_feature[30], style_feature
 
 
 def calcul_loss(decoder,
@@ -331,7 +331,7 @@ def train():
 	# 	print('Running on CPU')
 
 	local_rank = int(os.environ['LOCAL_RANK'])
-	os.environ['VISIBLE_DEVICES'] = '0,1,2,3,4,5'
+	os.environ['VISIBLE_DEVICES'] = '0,1,2,3'
 
 	seed = 6666
 	random.seed(seed)
