@@ -271,7 +271,10 @@ def get_AdaIN(contents, styles, feature = pretrained_vgg_features):
     return AdaIN(x, y)
 
 
-def calcul_loss(contents, styles, lamda= 1e-2 ,feature = pretrained_vgg_features):
+def calcul_loss(contents, styles, batch_size, lamda= 1e-2 ,feature = pretrained_vgg_features):
+    critersion_style = nn.MSELoss(reduction= 'sum').to(device)
+    critersion_content = nn.MSELoss(reduction= 'mean').to(device)    
+
     contents_image, contents_feature = get_feature(contents, feature)
     styles_image, styles_feature = get_feature(styles, feature)
 
@@ -282,17 +285,20 @@ def calcul_loss(contents, styles, lamda= 1e-2 ,feature = pretrained_vgg_features
 
     Loss_c = torch.zeros(1).to(device)
 
-    Loss_c = torch.mean((Mix_feature - AdaIN_content)**2)
+    Loss_c = critersion_content(Mix_feature, AdaIN_content)
 
     Loss_s = torch.zeros(1).to(device)
+
+
 
     for i in style_feature_args.keys():
         mean_style = torch.mean(styles_feature[i], dim=[-2, -1], keepdim=True)
         mean_AdaIN = torch.mean(AdaIN_feature[i], dim= [-2, -1], keepdim=True)
         std_style = torch.std(styles_feature[i], dim=[-2, -1], keepdim=True)
         std_AdaIN = torch.std(AdaIN_feature[i], dim=[-2, -1], keepdim=True)
-        Loss_s = Loss_s + style_feature_args[i]* torch.mean((mean_style - mean_AdaIN)**2) + style_feature_args[i]*torch.mean((std_style - std_AdaIN)**2)
+        Loss_s = Loss_s + style_feature_args[i]* critersion_style(mean_style, mean_AdaIN) + style_feature_args[i]*critersion_style(std_style, std_AdaIN)
 
+    Loss_s = Loss_s /batch_size
     Loss = Loss_c + lamda*Loss_s
     return Loss
 
@@ -313,7 +319,7 @@ def train():
             style_images = style_images.to(device)
 
             # 计算损失
-            loss = calcul_loss(content_images, style_images)
+            loss = calcul_loss(content_images, style_images, batch_size=32)
             total_loss += loss.item()
 
             # 反向传播和优化
@@ -326,6 +332,7 @@ def train():
             if batch_idx % 100 == 0:
                 loss_delta = total_loss - total_tmp_loss
                 print(f'Epoch [{epoch+1}/{num_epochs}], Step [{batch_idx+1}/{len(train_loader)}], Loss: {loss_delta/100:.4f}')
+                total_tmp_loss = total_loss
 
         total_loss = total_loss / len(train_loader)
         writer.add_scalars('Loss', {'train': total_loss}, epoch)
