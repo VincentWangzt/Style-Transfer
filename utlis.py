@@ -9,7 +9,7 @@ from PIL import Image
 from random import randint
 from tqdm import tqdm
 from datetime import datetime
-
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 # 激活函数
 def decoder_activation():
@@ -224,7 +224,7 @@ def AdaIN(x: torch.Tensor, y: torch.Tensor):
 
 
 alpha = 1  #content
-beta = 4  #style
+beta = 4e3  #style
 
 content_feature_args = {20: 1}
 f_tmp = alpha / sum(content_feature_args.values())
@@ -414,8 +414,8 @@ def train():
 				print(
 				    f'Epoch [{epoch+1}/{num_epochs}], Step [{batch_idx+1}/{len(train_loader)}], Loss: {loss_delta/100:.4f}'
 				)
-				writer.add_scalar('Loss', {'train': loss_delta.item()},
-				                  epoch * len(train_loader) + batch_idx)
+				writer.add_scalars('Loss', {'train': loss_delta},
+				                   epoch * len(train_loader) + batch_idx)
 
 		# total_loss = total_loss / len(train_loader)
 		# writer.add_scalars('loss', {'train': total_loss}, epoch)

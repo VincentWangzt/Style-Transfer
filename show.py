@@ -13,7 +13,7 @@ else:
 
 decoder = Decoder()
 decoder.load_state_dict(
-    torch.load('./decoder_epoch_2.pth', weights_only=True,
+    torch.load('./decoder_epoch_3.pth', weights_only=True,
                map_location=device))
 decoder = decoder.to(device)
 decoder.eval()
