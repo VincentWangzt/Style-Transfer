@@ -284,10 +284,10 @@ def calcul_loss(decoder,
                 lamda=10,
                 feature=pretrained_vgg_features):
 
-	transform = transforms.Compose([
-	    transforms.Normalize(mean=[0.485, 0.456, 0.406],
-	                         std=[0.229, 0.224, 0.225])  # 归一化
-	])
+	# transform = transforms.Compose([
+	#     transforms.Normalize(mean=[0.485, 0.456, 0.406],
+	#                          std=[0.229, 0.224, 0.225])  # 归一化
+	# ])
 	contents_image, contents_feature = get_feature(contents, feature)
 	styles_image, styles_feature = get_feature(styles, feature)
 
@@ -348,8 +348,8 @@ def train():
 	    transforms.Resize((512, 512)),  # 调整图像大小
 	    transforms.RandomCrop((256, 256)),  # 随机裁剪至 (256, 256)
 	    transforms.ToTensor(),  # 转换为Tensor
-	    transforms.Normalize(mean=[0.485, 0.456, 0.406],
-	                         std=[0.229, 0.224, 0.225])  # 归一化
+	    # transforms.Normalize(mean=[0.485, 0.456, 0.406],
+	    #                      std=[0.229, 0.224, 0.225])  # 归一化
 	])
 
 	content_dataset = FlatFolderDataset(root='/root/autodl-tmp/train2017',
