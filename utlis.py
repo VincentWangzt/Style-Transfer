@@ -10,6 +10,27 @@ from random import randint
 from tqdm import tqdm
 from datetime import datetime
 from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.utils.data.distributed import DistributedSampler
+from argparse import ArgumentParser
+import os
+import random
+
+# parser = ArgumentParser()
+# parser.add_argument("--local-rank", type=int, default=-1)
+# args = parser.parse_args()
+
+local_rank = int(os.environ['LOCAL_RANK'])
+os.environ['VISIBLE_DEVICES'] = '0,1,2,3'
+
+seed = 19260817
+random.seed(seed)
+torch.manual_seed(seed)
+torch.cuda.manual_seed_all(seed)
+
+# torch.cuda.set_device(local_rank)
+device = torch.device('cuda', local_rank)
+torch.distributed.init_process_group(backend='nccl')
+
 
 # 激活函数
 def decoder_activation():
@@ -244,12 +265,12 @@ pretrained_vgg_features = pretrained_vgg.features[:(
 decoder = Decoder()
 #encoder = Encoder(pretrained_model=pretrained_vgg)
 
-if torch.cuda.is_available():
-	device = torch.device("cuda:0")
-	print('Running on GPU 0')
-else:
-	device = torch.device("cpu")
-	print('Running on CPU')
+# if torch.cuda.is_available():
+# 	device = torch.device("cuda:0")
+# 	print('Running on GPU 0')
+# else:
+# 	device = torch.device("cpu")
+# 	print('Running on CPU')
 
 pretrained_vgg_features.to(device)
 
@@ -303,11 +324,14 @@ class ContentStyleDataset(data.Dataset):
 		return len(self.content_dataset)
 
 
-train_loader = data.DataLoader(ContentStyleDataset(content_dataset,
-                                                   style_dataset),
+content_style_dataset = ContentStyleDataset(content_dataset, style_dataset)
+
+train_sampler = DistributedSampler(content_style_dataset)
+
+train_loader = data.DataLoader(content_style_dataset,
                                batch_size=32,
-                               shuffle=True,
-                               num_workers=16)
+                               num_workers=16,
+                               sampler=train_sampler)
 
 
 def calc_gram_matrix(x):
@@ -380,6 +404,9 @@ optimizer = torch.optim.AdamW(decoder.parameters(), lr=1e-3, weight_decay=0.01)
 # scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer,
 #                                                                  T_0=21,
 #                                                                  T_mult=2)
+decoder = DDP(decoder.cuda(local_rank),
+              device_ids=[local_rank],
+              output_device=local_rank)
 
 
 def train():
@@ -408,7 +435,7 @@ def train():
 			# scheduler.step()
 
 			# 打印日志
-			if batch_idx % 100 == 0:
+			if batch_idx % 100 == 0 and local_rank == 0:
 				loss_delta = total_loss - total_tmp_loss
 				total_tmp_loss = total_loss
 				print(
@@ -421,11 +448,14 @@ def train():
 		# writer.add_scalars('loss', {'train': total_loss}, epoch)
 		# 保存模型
 		# if epoch % 0 == 9:
-		timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-		checkpoints_dir = './checkpoints'
-		torch.save(
-		    decoder.state_dict(),
-		    f'{checkpoints_dir}/decoder_epoch_{epoch+1}_{timestamp}.pth')
+		if local_rank == 0:
+			timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+			checkpoints_dir = './checkpoints'
+			if not os.path.exists(checkpoints_dir):
+				os.makedirs(checkpoints_dir)
+			torch.save(
+			    decoder.state_dict(),
+			    f'{checkpoints_dir}/decoder_epoch_{epoch+1}_{timestamp}.pth')
 
 
 if __name__ == '__main__':
