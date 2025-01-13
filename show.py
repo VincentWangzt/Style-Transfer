@@ -17,7 +17,7 @@ decoder = Decoder()
 decoder.load_state_dict({
     k[7:]: v
     for k, v in torch.load(
-        '/root/Style-Transfer/checkpoints/decoder_epoch_10_2025-01-13_23-01-03.pth',
+        './decoder_epoch_1_2025-01-14_00-54-29.pth',
         weights_only=True,
         map_location=device).items()
 })
@@ -42,10 +42,10 @@ pretrained_vgg_features = pretrained_vgg.features[:(
 
 pretrained_vgg_features = pretrained_vgg_features.to(device)
 
-content_dir = './images/inputs/content'
+content_dir = 'D:/DataSet/train2014/train2014'
 style_dir = './images/inputs/style'
 
-content_name = 'gatys-original.jpg'
+content_name = 'COCO_train2014_000000000081.jpg'
 style_name = 'starry_night.jpg'
 
 content_image = Image.open(f'{content_dir}/{content_name}')
@@ -57,6 +57,11 @@ transform = transforms.Compose([
     transforms.ToTensor(),  # 转换为Tensor
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224,
                                                           0.225])  # 归一化
+])
+
+transform_new = transforms.Compose([
+	transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224,
+														  0.225])  # 归一化
 ])
 
 content_image = transform(content_image).unsqueeze(0).to(device)
@@ -81,6 +86,7 @@ with torch.no_grad():
 	                                         pretrained_vgg_features)
 	Adain_feature = AdaIN(content_image, style_image)
 	Adain_image = decoder(Adain_feature)
+	#Adain_image = transform_new(Adain_image)
 	Adain_image = deprocess_image(Adain_image)
 	# print(Adain_image)
 	Adain_image.save('./tmp.jpg')
