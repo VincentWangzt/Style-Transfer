@@ -318,12 +318,14 @@ def train():
             content_images = content_images.to(device)
             style_images = style_images.to(device)
 
+            
+            optimizer.zero_grad()
             # 计算损失
             loss = calcul_loss(content_images, style_images, batch_size=32)
             total_loss += loss.item()
 
             # 反向传播和优化
-            optimizer.zero_grad()
+
             loss.backward()
             optimizer.step()
             scheduler.step()
