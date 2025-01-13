@@ -4,7 +4,7 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import datasets, transforms
 from torchvision.datasets import CocoDetection
 import random
-from pycocotools.coco import COCO
+#from pycocotools.coco import COCO
 
 class ContentStyleDataset(Dataset):
     def __init__(self, content_root, style_root, transform=None):
@@ -32,19 +32,19 @@ transform = transforms.Compose([
 
 # 创建自定义数据集实例
 dataset = ContentStyleDataset(
-    content_root='D:/DataSet/train2014',  # COCO训练集图像路径，注意train2014里面还要有一个文件夹来存储所有图片
+    content_root='/root/D/DataSet/train2014',  # COCO训练集图像路径，注意train2014里面还要有一个文件夹来存储所有图片
     style_root='./images/inputs/style/',  # WikiArt数据集图像路径
     transform=transform
 )
 
 # 创建数据加载器
-train_loader = DataLoader(dataset, batch_size=2, shuffle=True, num_workers=4)
+train_loader = DataLoader(dataset, batch_size=32, shuffle=True, num_workers=4)
 
 # 测试数据加载器
 if __name__ == '__main__':
     # 创建自定义数据集实例
     dataset = ContentStyleDataset(
-        content_root='D:/DataSet/train2014',  # COCO训练集图像路径
+        content_root='/root/D/DataSet/train2014',  # COCO训练集图像路径
         style_root='./images/inputs/style/',  # WikiArt数据集图像路径
         transform=transform
     )
