@@ -1,7 +1,7 @@
 import torch
 from utlis import Decoder, get_feature, AdaIN
 from PIL import Image
-from torchvision import transforms
+from torchvision import transforms, models
 import matplotlib.pyplot as plt
 
 if torch.cuda.is_available():
@@ -11,12 +11,36 @@ else:
 	device = torch.device("cpu")
 	print('Running on CPU')
 
+device = torch.device("cpu")
+
 decoder = Decoder()
-decoder.load_state_dict(
-    torch.load('./decoder_epoch_3.pth', weights_only=True,
-               map_location=device))
+decoder.load_state_dict({
+    k[7:]: v
+    for k, v in torch.load(
+        '/root/Style-Transfer/checkpoints/decoder_epoch_10_2025-01-13_23-01-03.pth',
+        weights_only=True,
+        map_location=device).items()
+})
 decoder = decoder.to(device)
 decoder.eval()
+
+alpha = 1  #content
+beta = 4e2  #style
+
+content_feature_args = {20: 1}
+f_tmp = alpha / sum(content_feature_args.values())
+content_feature_args = {k: v * f_tmp for k, v in content_feature_args.items()}
+
+style_feature_args = {1: 1, 6: 1, 11: 1, 20: 1}
+f_tmp = beta / sum(style_feature_args.values())
+style_feature_args = {k: v * f_tmp for k, v in style_feature_args.items()}
+
+pretrained_vgg = models.vgg19(weights=models.VGG19_Weights.DEFAULT).eval()
+pretrained_vgg_features = pretrained_vgg.features[:(
+    max(*list(content_feature_args.keys()), *list(style_feature_args.keys())) +
+    1)]
+
+pretrained_vgg_features = pretrained_vgg_features.to(device)
 
 content_dir = './images/inputs/content'
 style_dir = './images/inputs/style'
@@ -51,8 +75,10 @@ def deprocess_image(image):
 
 
 with torch.no_grad():
-	content_image, content_feature = get_feature(content_image)
-	style_image, style_feature = get_feature(style_image)
+	content_image, content_feature = get_feature(content_image,
+	                                             pretrained_vgg_features)
+	style_image, style_feature = get_feature(style_image,
+	                                         pretrained_vgg_features)
 	Adain_feature = AdaIN(content_image, style_image)
 	Adain_image = decoder(Adain_feature)
 	Adain_image = deprocess_image(Adain_image)

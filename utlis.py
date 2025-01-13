@@ -19,66 +19,22 @@ import random
 # parser.add_argument("--local-rank", type=int, default=-1)
 # args = parser.parse_args()
 
-local_rank = int(os.environ['LOCAL_RANK'])
-os.environ['VISIBLE_DEVICES'] = '0,1,2,3'
+alpha = 1  #content
+beta = 4e3  #style
 
-seed = 19260817
-random.seed(seed)
-torch.manual_seed(seed)
-torch.cuda.manual_seed_all(seed)
+content_feature_args = {20: 1}
+f_tmp = alpha / sum(content_feature_args.values())
+content_feature_args = {k: v * f_tmp for k, v in content_feature_args.items()}
 
-# torch.cuda.set_device(local_rank)
-device = torch.device('cuda', local_rank)
-torch.distributed.init_process_group(backend='nccl')
+style_feature_args = {1: 1, 6: 1, 11: 1, 20: 1}
+f_tmp = beta / sum(style_feature_args.values())
+style_feature_args = {k: v * f_tmp for k, v in style_feature_args.items()}
 
-
-# 激活函数
-def decoder_activation():
-	return nn.ReLU(inplace=True)
-
-
-# 编码器
-class Encoder(nn.Module):
-
-	def __init__(self, pretrained_model, target_layer="relu4_1"):
-		super(Encoder, self).__init__()
-		self.layers = []
-
-		# 定义层名称到序号的映射
-		layer_mapping = {
-		    "conv1_1": 0,
-		    "relu1_1": 1,
-		    "conv1_2": 2,
-		    "relu1_2": 3,
-		    "pool1": 4,
-		    "conv2_1": 5,
-		    "relu2_1": 6,
-		    "conv2_2": 7,
-		    "relu2_2": 8,
-		    "pool2": 9,
-		    "conv3_1": 10,
-		    "relu3_1": 11,
-		    "conv3_2": 12,
-		    "relu3_2": 13,
-		    "conv3_3": 14,
-		    "relu3_3": 15,
-		    "conv3_4": 16,
-		    "relu3_4": 17,
-		    "pool3": 18,
-		    "conv4_1": 19,
-		    "relu4_1": 20,
-		}
-
-		# 构造编码器直到目标层
-		for name, index in layer_mapping.items():
-			self.layers.append(pretrained_model.features[index])
-			if name == target_layer:
-				break
-
-	def forward(self, x):
-		for layer in self.layers:
-			x = layer(x)
-		return x
+# 构造预训练的 VGG 编码器
+pretrained_vgg = models.vgg19(weights=models.VGG19_Weights.DEFAULT).eval()
+pretrained_vgg_features = pretrained_vgg.features[:(
+    max(*list(content_feature_args.keys()), *list(style_feature_args.keys())) +
+    1)]
 
 
 # 解码器
@@ -86,56 +42,6 @@ class Decoder(nn.Module):
 
 	def __init__(self):
 		super(Decoder, self).__init__()
-
-		# self.decoder = nn.Sequential(
-		#     # 解码器的每一部分对应VGG-19的一个卷积块
-		#     # 第一个卷积块（对应VGG-19的第5个卷积块）
-
-		#     nn.ReflectionPad2d(1),
-		#     nn.ConvTranspose2d(512, 256, kernel_size=3, padding=0),
-		#     nn.ReLU(inplace=False),
-		#     nn.Upsample(scale_factor=2, mode="nearest"),
-
-		#     # 第二个卷积块（对应VGG-19的第4个卷积块）
-
-		#     nn.ReflectionPad2d(1),
-		#     nn.ConvTranspose2d(256, 256, kernel_size=3, padding=0),
-		#     nn.ReLU(inplace=False),
-
-		#     nn.ReflectionPad2d(1),
-		#     nn.ConvTranspose2d(256, 256, kernel_size=3, padding=0),
-		#     nn.ReLU(inplace=False),
-
-		#     nn.ReflectionPad2d(1),
-		#     nn.ConvTranspose2d(256, 256, kernel_size=3, padding=0),
-		#     nn.ReLU(inplace=False),
-
-		#     nn.ReflectionPad2d(1),
-		#     nn.ConvTranspose2d(256, 128, kernel_size=3, padding=0),
-		#     nn.ReLU(inplace=False),
-
-		#     nn.Upsample(scale_factor=2, mode="nearest"),
-
-		#     # 第三个卷积块（对应VGG-19的第3个卷积块）
-		#     nn.ReflectionPad2d(1),
-		#     nn.ConvTranspose2d(128, 128, kernel_size=3, padding=0),
-		#     nn.ReLU(inplace=True),
-
-		#     nn.ReflectionPad2d(1),
-		#     nn.ConvTranspose2d(128, 64, kernel_size=3, padding=0),
-		#     nn.ReLU(inplace=True),
-		#     nn.Upsample(scale_factor=2, mode="nearest"),
-
-		#     # 第四个卷积块（对应VGG-19的第2个卷积块）
-		#     nn.ReflectionPad2d(1),
-		#     nn.ConvTranspose2d(64, 64, kernel_size=3, padding=0),
-		#     nn.ReLU(inplace=True),
-
-		#     # 第五个卷积块（对应VGG-19的第1个卷积块）
-		#     nn.ReflectionPad2d(1),
-		#     nn.ConvTranspose2d(64, 3, kernel_size=3, padding=0),  # 上采样
-		#     nn.Tanh()  # 输出层使用Tanh激活函数，输出范围[-1, 1]
-		# )
 
 		#4_1
 		self.pad1 = nn.ReflectionPad2d(1)
@@ -244,37 +150,6 @@ def AdaIN(x: torch.Tensor, y: torch.Tensor):
 	return adain
 
 
-alpha = 1  #content
-beta = 4e3  #style
-
-content_feature_args = {20: 1}
-f_tmp = alpha / sum(content_feature_args.values())
-content_feature_args = {k: v * f_tmp for k, v in content_feature_args.items()}
-
-style_feature_args = {1: 1, 6: 1, 11: 1, 20: 1}
-f_tmp = beta / sum(style_feature_args.values())
-style_feature_args = {k: v * f_tmp for k, v in style_feature_args.items()}
-
-# 构造预训练的 VGG 编码器
-pretrained_vgg = models.vgg19(weights=models.VGG19_Weights.DEFAULT).eval()
-pretrained_vgg_features = pretrained_vgg.features[:(
-    max(*list(content_feature_args.keys()), *list(style_feature_args.keys())) +
-    1)]
-
-# 构造解码器
-decoder = Decoder()
-#encoder = Encoder(pretrained_model=pretrained_vgg)
-
-# if torch.cuda.is_available():
-# 	device = torch.device("cuda:0")
-# 	print('Running on GPU 0')
-# else:
-# 	device = torch.device("cpu")
-# 	print('Running on CPU')
-
-pretrained_vgg_features.to(device)
-
-
 class FlatFolderDataset(data.Dataset):
 
 	def __init__(self, root, transform):
@@ -291,20 +166,6 @@ class FlatFolderDataset(data.Dataset):
 
 	def __len__(self):
 		return len(self.paths)
-
-
-transform = transforms.Compose([
-    transforms.Resize((512, 512)),  # 调整图像大小
-    transforms.RandomCrop((256, 256)),  # 随机裁剪至 (256, 256)
-    transforms.ToTensor(),  # 转换为Tensor
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224,
-                                                          0.225])  # 归一化
-])
-
-content_dataset = FlatFolderDataset(root='/root/autodl-tmp/train2017',
-                                    transform=transform)
-style_dataset = FlatFolderDataset(root='./images/inputs/style',
-                                  transform=transform)
 
 
 class ContentStyleDataset(data.Dataset):
@@ -324,24 +185,6 @@ class ContentStyleDataset(data.Dataset):
 		return len(self.content_dataset)
 
 
-content_style_dataset = ContentStyleDataset(content_dataset, style_dataset)
-
-train_sampler = DistributedSampler(content_style_dataset)
-
-train_loader = data.DataLoader(content_style_dataset,
-                               batch_size=32,
-                               num_workers=16,
-                               sampler=train_sampler)
-
-
-def calc_gram_matrix(x):
-	# 1 x C x H x W -> C x HW -> C x C
-	_, c, h, w = x.shape
-	x = x.view(c, h * w)
-	x_t = x.transpose(0, 1)
-	return torch.matmul(x, x_t) / (h * w)
-
-
 def get_feature(x, feature=pretrained_vgg_features):
 	style_feature = {}
 	content_feature = {}
@@ -355,24 +198,11 @@ def get_feature(x, feature=pretrained_vgg_features):
 	return content_feature[20], style_feature
 
 
-def get_AdaIN(contents, styles, feature=pretrained_vgg_features):
-	feature.eval()
-	target_dep = 20
-	x = contents
-	y = styles
-	for i in range(target_dep + 1):
-		x = feature[i](x)
-		y = feature[i](y)
-
-	return AdaIN(x, y)
-
-
-criterion = nn.MSELoss()
-
-
-def calcul_loss(contents,
+def calcul_loss(decoder,
+                contents,
                 styles,
                 criterion,
+                device,
                 lamda=1e-2,
                 feature=pretrained_vgg_features):
 	contents_image, contents_feature = get_feature(contents, feature)
@@ -383,7 +213,8 @@ def calcul_loss(contents,
 
 	AdaIN_content, AdaIN_feature = get_feature(Mix_image)
 
-	Loss_c = criterion(AdaIN_content, contents_image)
+	Loss_c = criterion(AdaIN_content, Mix_feature)
+	# Loss_c = criterion(AdaIN_content, contents_image)
 
 	Loss_s = torch.tensor(0.0).to(device)
 
@@ -400,16 +231,66 @@ def calcul_loss(contents,
 	return Loss
 
 
-optimizer = torch.optim.AdamW(decoder.parameters(), lr=1e-3, weight_decay=0.01)
-# scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer,
-#                                                                  T_0=21,
-#                                                                  T_mult=2)
-decoder = DDP(decoder.cuda(local_rank),
-              device_ids=[local_rank],
-              output_device=local_rank)
-
-
 def train():
+
+	# 构造解码器
+	decoder = Decoder()
+	#encoder = Encoder(pretrained_model=pretrained_vgg)
+
+	# if torch.cuda.is_available():
+	# 	device = torch.device("cuda:0")
+	# 	print('Running on GPU 0')
+	# else:
+	# 	device = torch.device("cpu")
+	# 	print('Running on CPU')
+
+	local_rank = int(os.environ['LOCAL_RANK'])
+	os.environ['VISIBLE_DEVICES'] = '0,1,2,3'
+
+	seed = 19260817
+	random.seed(seed)
+	torch.manual_seed(seed)
+	torch.cuda.manual_seed_all(seed)
+
+	# torch.cuda.set_device(local_rank)
+	device = torch.device('cuda', local_rank)
+	torch.distributed.init_process_group(backend='nccl')
+
+	pretrained_vgg_features.to(device)
+
+	transform = transforms.Compose([
+	    transforms.Resize((512, 512)),  # 调整图像大小
+	    transforms.RandomCrop((256, 256)),  # 随机裁剪至 (256, 256)
+	    transforms.ToTensor(),  # 转换为Tensor
+	    transforms.Normalize(mean=[0.485, 0.456, 0.406],
+	                         std=[0.229, 0.224, 0.225])  # 归一化
+	])
+
+	content_dataset = FlatFolderDataset(root='/root/autodl-tmp/train2017',
+	                                    transform=transform)
+	style_dataset = FlatFolderDataset(root='./images/inputs/style',
+	                                  transform=transform)
+
+	content_style_dataset = ContentStyleDataset(content_dataset, style_dataset)
+
+	train_sampler = DistributedSampler(content_style_dataset)
+
+	train_loader = data.DataLoader(content_style_dataset,
+	                               batch_size=32,
+	                               num_workers=16,
+	                               sampler=train_sampler)
+
+	criterion = nn.MSELoss()
+	optimizer = torch.optim.AdamW(decoder.parameters(),
+	                              lr=1e-3,
+	                              weight_decay=0.01)
+	# scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer,
+	#                                                                  T_0=21,
+	#                                                                  T_mult=2)
+	decoder = DDP(decoder.cuda(local_rank),
+	              device_ids=[local_rank],
+	              output_device=local_rank)
+
 	writer = SummaryWriter('./loss_curve')
 	num_epochs = 10
 	decoder.train()  # 设置解码器为训练模式
@@ -426,7 +307,8 @@ def train():
 			style_images = style_images.to(device)
 
 			# 计算损失
-			loss = calcul_loss(content_images, style_images, criterion)
+			loss = calcul_loss(decoder, content_images, style_images,
+			                   criterion, device)
 			total_loss += loss.item()
 
 			# 反向传播和优化
