@@ -2,7 +2,6 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-models/
 data/
 tmp.jpg
 decoder_epoch_*.pth

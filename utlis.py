@@ -30,72 +30,80 @@ style_feature_args = {1: 1, 6: 1, 11: 1, 20: 1}
 f_tmp = beta / sum(style_feature_args.values())
 style_feature_args = {k: v * f_tmp for k, v in style_feature_args.items()}
 
+
+class Encoder(nn.Module):
+
+	def __init__(self):
+		self.features = nn.Sequential(
+		    nn.Conv2d(3, 3, (1, 1)),
+		    nn.ReflectionPad2d((1, 1, 1, 1)),
+		    nn.Conv2d(3, 64, (3, 3)),
+		    nn.ReLU(),  # relu1-1
+		    nn.ReflectionPad2d((1, 1, 1, 1)),
+		    nn.Conv2d(64, 64, (3, 3)),
+		    nn.ReLU(),  # relu1-2
+		    nn.MaxPool2d((2, 2), (2, 2), (0, 0), ceil_mode=True),
+		    nn.ReflectionPad2d((1, 1, 1, 1)),
+		    nn.Conv2d(64, 128, (3, 3)),
+		    nn.ReLU(),  # relu2-1
+		    nn.ReflectionPad2d((1, 1, 1, 1)),
+		    nn.Conv2d(128, 128, (3, 3)),
+		    nn.ReLU(),  # relu2-2
+		    nn.MaxPool2d((2, 2), (2, 2), (0, 0), ceil_mode=True),
+		    nn.ReflectionPad2d((1, 1, 1, 1)),
+		    nn.Conv2d(128, 256, (3, 3)),
+		    nn.ReLU(),  # relu3-1
+		    nn.ReflectionPad2d((1, 1, 1, 1)),
+		    nn.Conv2d(256, 256, (3, 3)),
+		    nn.ReLU(),  # relu3-2
+		    nn.ReflectionPad2d((1, 1, 1, 1)),
+		    nn.Conv2d(256, 256, (3, 3)),
+		    nn.ReLU(),  # relu3-3
+		    nn.ReflectionPad2d((1, 1, 1, 1)),
+		    nn.Conv2d(256, 256, (3, 3)),
+		    nn.ReLU(),  # relu3-4
+		    nn.MaxPool2d((2, 2), (2, 2), (0, 0), ceil_mode=True),
+		    nn.ReflectionPad2d((1, 1, 1, 1)),
+		    nn.Conv2d(256, 512, (3, 3)),
+		    nn.ReLU(),  # relu4-1, this is the last layer used
+		    nn.ReflectionPad2d((1, 1, 1, 1)),
+		    nn.Conv2d(512, 512, (3, 3)),
+		    nn.ReLU(),  # relu4-2
+		    nn.ReflectionPad2d((1, 1, 1, 1)),
+		    nn.Conv2d(512, 512, (3, 3)),
+		    nn.ReLU(),  # relu4-3
+		    nn.ReflectionPad2d((1, 1, 1, 1)),
+		    nn.Conv2d(512, 512, (3, 3)),
+		    nn.ReLU(),  # relu4-4
+		    nn.MaxPool2d((2, 2), (2, 2), (0, 0), ceil_mode=True),
+		    nn.ReflectionPad2d((1, 1, 1, 1)),
+		    nn.Conv2d(512, 512, (3, 3)),
+		    nn.ReLU(),  # relu5-1
+		    nn.ReflectionPad2d((1, 1, 1, 1)),
+		    nn.Conv2d(512, 512, (3, 3)),
+		    nn.ReLU(),  # relu5-2
+		    nn.ReflectionPad2d((1, 1, 1, 1)),
+		    nn.Conv2d(512, 512, (3, 3)),
+		    nn.ReLU(),  # relu5-3
+		    nn.ReflectionPad2d((1, 1, 1, 1)),
+		    nn.Conv2d(512, 512, (3, 3)),
+		    nn.ReLU()  # relu5-4
+		)
+		self.features.load_state_dict(
+		    torch.load("./models/vgg_normalised.pth",
+		               weights_only=True,
+		               map_location='cpu'))
+
+
 # 构造预训练的 VGG 编码器
-pretrained_vgg = models.vgg19(weights=models.VGG19_Weights.DEFAULT).eval()
+# pretrained_vgg = models.vgg19(weights=models.VGG19_Weights.DEFAULT).eval()
+pretrained_vgg = Encoder()
 pretrained_vgg_features = pretrained_vgg.features[:(
     max(*list(content_feature_args.keys()), *list(style_feature_args.keys())) +
     1)]
 
-
-
-class Encoder(nn.Module):
-	def __init__(self):
-  		self.image_encoder = nn.Sequential(
-			nn.Conv2d(3, 3, (1, 1)),
-			nn.ReflectionPad2d((1, 1, 1, 1)),
-			nn.Conv2d(3, 64, (3, 3)),
-			nn.ReLU(),  # relu1-1
-			nn.ReflectionPad2d((1, 1, 1, 1)),
-			nn.Conv2d(64, 64, (3, 3)),
-			nn.ReLU(),  # relu1-2
-			nn.MaxPool2d((2, 2), (2, 2), (0, 0), ceil_mode=True),
-			nn.ReflectionPad2d((1, 1, 1, 1)),
-			nn.Conv2d(64, 128, (3, 3)),
-			nn.ReLU(),  # relu2-1
-			nn.ReflectionPad2d((1, 1, 1, 1)),
-			nn.Conv2d(128, 128, (3, 3)),
-			nn.ReLU(),  # relu2-2
-			nn.MaxPool2d((2, 2), (2, 2), (0, 0), ceil_mode=True),
-			nn.ReflectionPad2d((1, 1, 1, 1)),
-			nn.Conv2d(128, 256, (3, 3)),
-			nn.ReLU(),  # relu3-1
-			nn.ReflectionPad2d((1, 1, 1, 1)),
-			nn.Conv2d(256, 256, (3, 3)),
-			nn.ReLU(),  # relu3-2
-			nn.ReflectionPad2d((1, 1, 1, 1)),
-			nn.Conv2d(256, 256, (3, 3)),
-			nn.ReLU(),  # relu3-3
-			nn.ReflectionPad2d((1, 1, 1, 1)),
-			nn.Conv2d(256, 256, (3, 3)),
-			nn.ReLU(),  # relu3-4
-			nn.MaxPool2d((2, 2), (2, 2), (0, 0), ceil_mode=True),
-			nn.ReflectionPad2d((1, 1, 1, 1)),
-			nn.Conv2d(256, 512, (3, 3)),
-			nn.ReLU(),  # relu4-1, this is the last layer used
-			nn.ReflectionPad2d((1, 1, 1, 1)),
-			nn.Conv2d(512, 512, (3, 3)),
-			nn.ReLU(),  # relu4-2
-			nn.ReflectionPad2d((1, 1, 1, 1)),
-			nn.Conv2d(512, 512, (3, 3)),
-			nn.ReLU(),  # relu4-3
-			nn.ReflectionPad2d((1, 1, 1, 1)),
-			nn.Conv2d(512, 512, (3, 3)),
-			nn.ReLU(),  # relu4-4
-			nn.MaxPool2d((2, 2), (2, 2), (0, 0), ceil_mode=True),
-			nn.ReflectionPad2d((1, 1, 1, 1)),
-			nn.Conv2d(512, 512, (3, 3)),
-			nn.ReLU(),  # relu5-1
-			nn.ReflectionPad2d((1, 1, 1, 1)),
-			nn.Conv2d(512, 512, (3, 3)),
-			nn.ReLU(),  # relu5-2
-			nn.ReflectionPad2d((1, 1, 1, 1)),
-			nn.Conv2d(512, 512, (3, 3)),
-			nn.ReLU(),  # relu5-3
-			nn.ReflectionPad2d((1, 1, 1, 1)),
-			nn.Conv2d(512, 512, (3, 3)),
-			nn.ReLU()  # relu5-4
-		)
-		
+for param in pretrained_vgg.parameters():
+	param.requires_grad = False
 
 
 # 解码器
@@ -197,7 +205,7 @@ def compute_mean_std(x: torch.Tensor):
 	size = x.size()
 	N, C = size[:2]
 	std_x = x.view(N, C, -1).std(dim=2) + 1e-6
-	std_x = std_x.view(N, C , 1, 1)
+	std_x = std_x.view(N, C, 1, 1)
 	mean_x = x.view(N, C, -1).mean(dim=2).view(N, C, 1, 1)
 	return mean_x, std_x
 
@@ -213,9 +221,9 @@ def AdaIN(x: torch.Tensor, y: torch.Tensor):
 	if y.dim() == 3:
 		y = y.unsqueeze(0)
 
-	mean_y , std_y = compute_mean_std(y)
+	mean_y, std_y = compute_mean_std(y)
 	mean_x, std_x = compute_mean_std(x)
-	adain = (x - mean_x) /std_x * std_y + mean_y
+	adain = (x - mean_x) / std_x * std_y + mean_y
 
 	return adain
 
@@ -275,10 +283,10 @@ def calcul_loss(decoder,
                 device,
                 lamda=10,
                 feature=pretrained_vgg_features):
-	
+
 	transform = transforms.Compose([
-		transforms.Normalize(mean=[0.485, 0.456, 0.406],
-							 std=[0.229, 0.224, 0.225])  # 归一化
+	    transforms.Normalize(mean=[0.485, 0.456, 0.406],
+	                         std=[0.229, 0.224, 0.225])  # 归一化
 	])
 	contents_image, contents_feature = get_feature(contents, feature)
 	styles_image, styles_feature = get_feature(styles, feature)
@@ -294,7 +302,6 @@ def calcul_loss(decoder,
 	# Loss_c = criterion(AdaIN_content, contents_image)
 
 	Loss_s = torch.tensor(0.0, requires_grad=True).to(device)
-
 
 	for i in style_feature_args.keys():
 		# mean_style = torch.mean(styles_feature[i], dim=[-2, -1], keepdim=True)
@@ -391,7 +398,7 @@ def train():
 
 			# 计算损失
 			loss_c, loss_s = calcul_loss(decoder, content_images, style_images,
-			                   criterion, device)
+			                             criterion, device)
 			loss = loss_c + loss_s
 			total_loss_c += loss_c.item()
 			total_loss_s += loss_s.item()
