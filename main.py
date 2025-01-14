@@ -6,13 +6,15 @@ from PIL import Image
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import os
-
+from torch import nn
+from torch.nn.parallel import DataParallel
+from torchvision.utils import save_image
 # TODO: visualize losses
 
-MODEL_DIR = './models/'
-hub.set_dir(MODEL_DIR)
-if not os.path.exists(MODEL_DIR):
-	os.makedirs(MODEL_DIR)
+# MODEL_DIR = './models/'
+# hub.set_dir(MODEL_DIR)
+# if not os.path.exists(MODEL_DIR):
+# 	os.makedirs(MODEL_DIR)
 
 if torch.cuda.is_available():
 	device = torch.device("cuda:0")
@@ -22,7 +24,7 @@ else:
 	print('Running on CPU')
 
 alpha = 1
-beta = 1e4
+beta = 1e3
 
 content_feature_args = {25: 1}
 f_tmp = alpha / sum(content_feature_args.values())
@@ -87,6 +89,18 @@ def get_laplacian(x, p=4):
 	x = F.conv2d(x, laplacian_filter.view(1, 1, 3, 3))
 	x = F.avg_pool2d(x, p).squeeze()
 	return x
+
+
+def get_std_mean(x):
+	assert x.dim() == 4
+	mean = torch.mean(x, dim=[-1, -2], keepdim=True)
+	std = torch.std(x, dim=[-1, -2], keepdim=True)
+	return mean, std
+
+
+def InstanceNorm(x):
+	mean, std = get_std_mean(x)
+	return (x - mean) / std
 
 
 def calc_loss(x, content_hat, style_hat, lap_hat):
@@ -170,14 +184,13 @@ CONTENT_IMAGE_PATH = './images/inputs/content/'
 
 STYLE_PATH = STYLE_IMAGE_PATH + 'starry_night.jpg'
 
-CONTENT_PATH = CONTENT_IMAGE_PATH + 'gatys-original.jpg'
+CONTENT_PATH = CONTENT_IMAGE_PATH + 'nilang.jpg'
 
 shape = (512, 512)
 
-_, style_image, content_image = load_image(
-    STYLE_PATH,
-    CONTENT_PATH,
-    shape=shape)
+_, style_image, content_image = load_image(STYLE_PATH,
+                                           CONTENT_PATH,
+                                           shape=shape)
 
 show_save_img(deprocess_image(content_image), path='content.jpg')
 show_save_img(deprocess_image(style_image), path='style.jpg')
@@ -195,11 +208,310 @@ def get_init_image(mode='content'):
 		return content_image.clone().requires_grad_(True).to(device)
 	elif mode == 'random':
 		return torch.randn_like(content_image).requires_grad_(True).to(device)
+	elif mode == 'adain':
+		decoder = nn.Sequential(
+		    nn.ReflectionPad2d((1, 1, 1, 1)),
+		    nn.Conv2d(512, 256, (3, 3)),
+		    nn.ReLU(),
+		    nn.Upsample(scale_factor=2, mode='nearest'),
+		    nn.ReflectionPad2d((1, 1, 1, 1)),
+		    nn.Conv2d(256, 256, (3, 3)),
+		    nn.ReLU(),
+		    nn.ReflectionPad2d((1, 1, 1, 1)),
+		    nn.Conv2d(256, 256, (3, 3)),
+		    nn.ReLU(),
+		    nn.ReflectionPad2d((1, 1, 1, 1)),
+		    nn.Conv2d(256, 256, (3, 3)),
+		    nn.ReLU(),
+		    nn.ReflectionPad2d((1, 1, 1, 1)),
+		    nn.Conv2d(256, 128, (3, 3)),
+		    nn.ReLU(),
+		    nn.Upsample(scale_factor=2, mode='nearest'),
+		    nn.ReflectionPad2d((1, 1, 1, 1)),
+		    nn.Conv2d(128, 128, (3, 3)),
+		    nn.ReLU(),
+		    nn.ReflectionPad2d((1, 1, 1, 1)),
+		    nn.Conv2d(128, 64, (3, 3)),
+		    nn.ReLU(),
+		    nn.Upsample(scale_factor=2, mode='nearest'),
+		    nn.ReflectionPad2d((1, 1, 1, 1)),
+		    nn.Conv2d(64, 64, (3, 3)),
+		    nn.ReLU(),
+		    nn.ReflectionPad2d((1, 1, 1, 1)),
+		    nn.Conv2d(64, 3, (3, 3)),
+		)
+
+		class Decoder(nn.Module):
+
+			def __init__(self):
+				super(Decoder, self).__init__()
+
+				#4_1
+				self.pad1 = nn.ReflectionPad2d(1)
+				self.invconv1 = nn.Conv2d(512, 256, kernel_size=3, padding=0)
+				self.acctivate1 = nn.ReLU()
+				self.upsample1 = nn.Upsample(scale_factor=2, mode="nearest")
+
+				#3_4
+				self.pad2 = nn.ReflectionPad2d(1)
+				self.invconv2 = nn.Conv2d(256, 256, kernel_size=3, padding=0)
+				self.acctivate2 = nn.ReLU()
+				#3_3
+				self.pad3 = nn.ReflectionPad2d(1)
+				self.invconv3 = nn.Conv2d(256, 256, kernel_size=3, padding=0)
+				self.acctivate3 = nn.ReLU()
+				#3_2
+				self.pad4 = nn.ReflectionPad2d(1)
+				self.invconv4 = nn.Conv2d(256, 256, kernel_size=3, padding=0)
+				self.acctivate4 = nn.ReLU()
+				#3_1
+				self.pad5 = nn.ReflectionPad2d(1)
+				self.invconv5 = nn.Conv2d(256, 128, kernel_size=3, padding=0)
+				self.acctivate5 = nn.ReLU()
+				self.upsample2 = nn.Upsample(scale_factor=2, mode="nearest")
+
+				#2_2
+				self.pad6 = nn.ReflectionPad2d(1)
+				self.invconv6 = nn.Conv2d(128, 128, kernel_size=3, padding=0)
+				self.acctivate6 = nn.ReLU()
+				#2_1
+				self.pad7 = nn.ReflectionPad2d(1)
+				self.invconv7 = nn.Conv2d(128, 64, kernel_size=3, padding=0)
+				self.acctivate7 = nn.ReLU()
+				self.upsample3 = nn.Upsample(scale_factor=2, mode="nearest")
+
+				#1_2
+				self.pad8 = nn.ReflectionPad2d(1)
+				self.invconv8 = nn.Conv2d(64, 64, kernel_size=3, padding=0)
+				self.acctivate8 = nn.ReLU()
+
+				#1_1
+				self.pad9 = nn.ReflectionPad2d(1)
+				self.invconv9 = nn.Conv2d(64, 3, kernel_size=3, padding=0)
+				# self.acctivate9 = nn.Tanh()
+				#self.decoder = decoder
+
+			def forward(self, x):
+				x = self.pad1(x)
+				x = self.invconv1(x)
+				x = self.acctivate1(x)
+				x = self.upsample1(x)
+
+				x = self.pad2(x)
+				x = self.invconv2(x)
+				x = self.acctivate2(x)
+
+				x = self.pad3(x)
+				x = self.invconv3(x)
+				x = self.acctivate3(x)
+
+				x = self.pad4(x)
+				x = self.invconv4(x)
+				x = self.acctivate4(x)
+
+				x = self.pad5(x)
+				x = self.invconv5(x)
+				x = self.acctivate5(x)
+				x = self.upsample2(x)
+
+				x = self.pad6(x)
+				x = self.invconv6(x)
+				x = self.acctivate6(x)
+
+				x = self.pad7(x)
+				x = self.invconv7(x)
+				x = self.acctivate7(x)
+				x = self.upsample3(x)
+
+				x = self.pad8(x)
+				x = self.invconv8(x)
+				x = self.acctivate8(x)
+
+				x = self.pad9(x)
+				x = self.invconv9(x)
+				# x = self.acctivate9(x)
+
+				#x = self.decoder(x)
+
+				return x
+
+		decoder = Decoder()
+		decoder.load_state_dict({
+		    k[7:]: v
+		    for k, v in torch.load(
+		        './models/checkpoints/decoder_lambda_5_epoch_16_2025-01-14_08-14-23.pth',
+		        map_location=device,
+		        weights_only=True).items()
+		})
+		decoder.to(device)
+
+		class Encoder(nn.Module):
+
+			def __init__(self):
+				super(Encoder, self).__init__()
+				self.features = nn.Sequential(
+				    nn.Conv2d(3, 3, (1, 1)),
+				    nn.ReflectionPad2d((1, 1, 1, 1)),
+				    nn.Conv2d(3, 64, (3, 3)),
+				    nn.ReLU(),  # relu1-1
+				    nn.ReflectionPad2d((1, 1, 1, 1)),
+				    nn.Conv2d(64, 64, (3, 3)),
+				    nn.ReLU(),  # relu1-2
+				    nn.MaxPool2d((2, 2), (2, 2), (0, 0), ceil_mode=True),
+				    nn.ReflectionPad2d((1, 1, 1, 1)),
+				    nn.Conv2d(64, 128, (3, 3)),
+				    nn.ReLU(),  # relu2-1
+				    nn.ReflectionPad2d((1, 1, 1, 1)),
+				    nn.Conv2d(128, 128, (3, 3)),
+				    nn.ReLU(),  # relu2-2
+				    nn.MaxPool2d((2, 2), (2, 2), (0, 0), ceil_mode=True),
+				    nn.ReflectionPad2d((1, 1, 1, 1)),
+				    nn.Conv2d(128, 256, (3, 3)),
+				    nn.ReLU(),  # relu3-1
+				    nn.ReflectionPad2d((1, 1, 1, 1)),
+				    nn.Conv2d(256, 256, (3, 3)),
+				    nn.ReLU(),  # relu3-2
+				    nn.ReflectionPad2d((1, 1, 1, 1)),
+				    nn.Conv2d(256, 256, (3, 3)),
+				    nn.ReLU(),  # relu3-3
+				    nn.ReflectionPad2d((1, 1, 1, 1)),
+				    nn.Conv2d(256, 256, (3, 3)),
+				    nn.ReLU(),  # relu3-4
+				    nn.MaxPool2d((2, 2), (2, 2), (0, 0), ceil_mode=True),
+				    nn.ReflectionPad2d((1, 1, 1, 1)),
+				    nn.Conv2d(256, 512, (3, 3)),
+				    nn.ReLU(),  # relu4-1, this is the last layer used
+				    nn.ReflectionPad2d((1, 1, 1, 1)),
+				    nn.Conv2d(512, 512, (3, 3)),
+				    nn.ReLU(),  # relu4-2
+				    nn.ReflectionPad2d((1, 1, 1, 1)),
+				    nn.Conv2d(512, 512, (3, 3)),
+				    nn.ReLU(),  # relu4-3
+				    nn.ReflectionPad2d((1, 1, 1, 1)),
+				    nn.Conv2d(512, 512, (3, 3)),
+				    nn.ReLU(),  # relu4-4
+				    nn.MaxPool2d((2, 2), (2, 2), (0, 0), ceil_mode=True),
+				    nn.ReflectionPad2d((1, 1, 1, 1)),
+				    nn.Conv2d(512, 512, (3, 3)),
+				    nn.ReLU(),  # relu5-1
+				    nn.ReflectionPad2d((1, 1, 1, 1)),
+				    nn.Conv2d(512, 512, (3, 3)),
+				    nn.ReLU(),  # relu5-2
+				    nn.ReflectionPad2d((1, 1, 1, 1)),
+				    nn.Conv2d(512, 512, (3, 3)),
+				    nn.ReLU(),  # relu5-3
+				    nn.ReflectionPad2d((1, 1, 1, 1)),
+				    nn.Conv2d(512, 512, (3, 3)),
+				    nn.ReLU()  # relu5-4
+				)
+				self.features.load_state_dict(
+				    torch.load("./models/checkpoints/vgg_normalised.pth",
+				               weights_only=True,
+				               map_location='cpu'))
+
+		adain_content_feature_args = {30: 1}
+		adain_alpha = 1
+		f_tmp = adain_alpha / sum(adain_content_feature_args.values())
+		adain_content_feature_args = {
+		    k: v * f_tmp
+		    for k, v in adain_content_feature_args.items()
+		}
+		adain_beta = 4
+		adain_style_feature_args = {3: 1, 10: 1, 17: 1, 30: 1}
+		f_tmp = adain_beta / sum(adain_style_feature_args.values())
+		adain_style_feature_args = {
+		    k: v * f_tmp
+		    for k, v in adain_style_feature_args.items()
+		}
+
+		pretrained_vgg = Encoder()
+		pretrained_vgg_features = pretrained_vgg.features[:(
+		    max(*list(adain_content_feature_args.keys()
+		              ), *list(adain_style_feature_args.keys())) + 1)]
+
+		for param in pretrained_vgg_features.parameters():
+			param.requires_grad = False
+		pretrained_vgg_features = pretrained_vgg_features.to(device)
+
+		def compute_mean_std(x: torch.Tensor):
+			if x.dim() == 3:
+				x = x.unsqueeze(0)
+			size = x.size()
+			N, C = size[:2]
+			std_x = x.view(N, C, -1).std(dim=2) + 1e-6
+			std_x = std_x.view(N, C, 1, 1)
+			mean_x = x.view(N, C, -1).mean(dim=2).view(N, C, 1, 1)
+			return mean_x, std_x
+
+		def AdaIN(x: torch.Tensor, y: torch.Tensor):
+			'''
+			x : N*C*H*W
+			y : N*C*H*W 
+			N = 1
+			'''
+			if x.dim() == 3:
+				x = x.unsqueeze(0)
+			if y.dim() == 3:
+				y = y.unsqueeze(0)
+
+			mean_y, std_y = compute_mean_std(y)
+			mean_x, std_x = compute_mean_std(x)
+			adain = (x - mean_x) / std_x * std_y + mean_y
+
+			return adain
+
+		def __get_feature(x, feature=pretrained_vgg_features):
+			style_feature = {}
+			content_feature = {}
+			feature.eval()
+			for i in range(len(feature)):
+				x = feature[i](x)
+				if i in adain_style_feature_args.keys():
+					style_feature[i] = x
+				if i in adain_content_feature_args.keys():
+					content_feature[i] = x
+			return content_feature[30], style_feature
+
+		_content_image = Image.open(CONTENT_PATH)
+		_style_image = Image.open(STYLE_PATH)
+
+		# _content_image = deprocess_image(content_image)
+		# _style_image = deprocess_image(style_image)
+		_transform = transforms.Compose([
+		    transforms.Resize(512),  # 调整图像大小
+		    # transforms.RandomCrop((256, 256)),  # 随机裁剪至 (256, 256)
+		    transforms.ToTensor(),  # 转换为Tensor
+		    # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224,
+		    #                                                       0.225])  # 归一化
+		])
+		_content_image = _transform(_content_image).unsqueeze(0).to(device)
+		_style_image = _transform(_style_image).unsqueeze(0).to(device)
+
+		with torch.no_grad():
+			_content_image, _content_feature = __get_feature(
+			    _content_image, pretrained_vgg_features)
+			_style_image, _style_feature = __get_feature(
+			    _style_image, pretrained_vgg_features)
+			Adain_feature = AdaIN(_content_image, _style_image)
+			Adain_image = decoder(Adain_feature)
+			save_image(Adain_image, './tmp.jpg')
+			#Adain_image = transform_new(Adain_image)
+			#Adain_image = deprocess_image(Adain_image)
+			# print(Adain_image)
+			#Adain_image.save('./tmp.jpg')
+			# save_image(Adain_image, './tmp.jpg')
+			# plt.imshow(Adain_image)
+			# plt.show()
+		return load_image(
+		    './tmp.jpg', './tmp.jpg',
+		    shape=shape)[2].clone().requires_grad_(True).to(device)
+		# return preprocess_image(Adain_image).clone().requires_grad_(True).to(
+		#     device)
 	else:
 		raise ValueError('Invalid mode')
 
 
-output_image = get_init_image('content')
+output_image = get_init_image('adain')
 
 max_iter = 20
 
@@ -209,7 +521,7 @@ optimizer = torch.optim.LBFGS([output_image], max_iter=max_iter)
 max_step = 1000
 if __name__ == '__main__':
 	import argparse
-	
+
 	parser = argparse.ArgumentParser(description='The configs')
 	parser.add_argument('--remain_shape', type=bool, default=True)
 	args = parser.parse_args()
@@ -229,6 +541,9 @@ if __name__ == '__main__':
 		# optimizer.step()
 		if step % 10 == 0:
 			if args.remain_shape:
-				show_save_img(deprocess_image(output_image), path='output_latest.jpg', shape= content_shape)
+				show_save_img(deprocess_image(output_image),
+				              path='output_latest.jpg',
+				              shape=content_shape)
 			else:
-				show_save_img(deprocess_image(output_image), path='output_latest.jpg')
+				show_save_img(deprocess_image(output_image),
+				              path='output_latest.jpg')

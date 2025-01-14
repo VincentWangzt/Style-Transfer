@@ -3,6 +3,7 @@ from utlis import Decoder, get_feature, AdaIN, Encoder
 from PIL import Image
 from torchvision import transforms, models
 import matplotlib.pyplot as plt
+from torchvision.utils import save_image
 
 if torch.cuda.is_available():
 	device = torch.device("cuda:0")
@@ -16,10 +17,9 @@ device = torch.device("cpu")
 decoder = Decoder()
 decoder.load_state_dict({
     k[7:]: v
-    for k, v in torch.load(
-        '/root/Style-Transfer/checkpoints/decoder_epoch_1_2025-01-14_04-15-36.pth',
-        weights_only=True,
-        map_location=device).items()
+    for k, v in torch.load('./decoder_epoch_25_2025-01-14_11-52-04.pth',
+                           weights_only=True,
+                           map_location=device).items()
 })
 decoder = decoder.to(device)
 decoder.eval()
@@ -46,14 +46,14 @@ pretrained_vgg_features = pretrained_vgg_features.to(device)
 content_dir = './images/inputs/content'
 style_dir = './images/inputs/style'
 
-content_name = 'gatys-original.jpg'
+content_name = 'winter-wolf.jpg'
 style_name = 'starry_night.jpg'
 
 content_image = Image.open(f'{content_dir}/{content_name}')
 style_image = Image.open(f'{style_dir}/{style_name}')
 
 transform = transforms.Compose([
-    transforms.Resize((256, 256)),  # 调整图像大小
+    transforms.Resize(512),  # 调整图像大小
     # transforms.RandomCrop((256, 256)),  # 随机裁剪至 (256, 256)
     transforms.ToTensor(),  # 转换为Tensor
     # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224,
@@ -89,8 +89,9 @@ with torch.no_grad():
 	Adain_feature = AdaIN(content_image, style_image)
 	Adain_image = decoder(Adain_feature)
 	#Adain_image = transform_new(Adain_image)
-	Adain_image = deprocess_image(Adain_image)
+	#Adain_image = deprocess_image(Adain_image)
 	# print(Adain_image)
-	Adain_image.save('./tmp.jpg')
+	#Adain_image.save('./tmp.jpg')
+	save_image(Adain_image, './tmp.jpg')
 	# plt.imshow(Adain_image)
 	# plt.show()
