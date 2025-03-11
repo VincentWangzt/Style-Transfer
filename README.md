@@ -1,0 +1,7 @@
+main.py函数中封装了我们的主算法，即基于AdaIN以及Lapstyle的改进版本
+
+main_Gatys_Lapstyle封装了我们的Gatys，Lapstyle风格迁移算法
+
+show.py用于在给定checkpoint下，接受content image和style image并展示AdaIN算法的结果
+
+更多细节和输出结果参见`Report.pdf`

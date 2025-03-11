@@ -24,7 +24,7 @@ else:
 	print('Running on CPU')
 
 alpha = 1
-beta = 1e3
+beta = 1e2
 
 content_feature_args = {25: 1}
 f_tmp = alpha / sum(content_feature_args.values())
@@ -338,7 +338,7 @@ def get_init_image(mode='content'):
 		decoder = Decoder()
 		decoder.load_state_dict({
 		    k[7:]: v
-		    for k, v in torch.load(
+		    for k, v in torch.load( #如果要用decoder_lambda_10.pth需要修改decoder为 x = self.decoder()剩下都注释掉,定义则只保留self.decoder的定义，剩下的nn函数都注释掉
 		        './models/checkpoints/decoder_lambda_5_epoch_16_2025-01-14_08-14-23.pth',
 		        map_location=device,
 		        weights_only=True).items()

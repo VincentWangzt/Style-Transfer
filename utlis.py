@@ -14,7 +14,11 @@ from torch.utils.data.distributed import DistributedSampler
 from argparse import ArgumentParser
 import os
 import random
-import torch.nn.functional as F
+
+
+#本训练代码是按照一机六卡写得！！！！！！！！！！！！！！！
+
+
 
 # parser = ArgumentParser()
 # parser.add_argument("--local-rank", type=int, default=-1)
@@ -23,11 +27,11 @@ import torch.nn.functional as F
 alpha = 1  #content
 beta = 4  #style
 
-content_feature_args = {3: 1, 10: 1, 17: 1, 30: 1, 43: 1}
+content_feature_args = {30: 1}
 f_tmp = alpha / sum(content_feature_args.values())
 content_feature_args = {k: v * f_tmp for k, v in content_feature_args.items()}
 
-style_feature_args = {3: 1, 10: 1, 17: 1, 30: 1, 43: 1}
+style_feature_args = {3: 1, 10: 1, 17: 1, 30: 1}
 f_tmp = beta / sum(style_feature_args.values())
 style_feature_args = {k: v * f_tmp for k, v in style_feature_args.items()}
 
@@ -37,109 +41,106 @@ class Encoder(nn.Module):
 	def __init__(self):
 		super(Encoder, self).__init__()
 		self.features = nn.Sequential(
-		    nn.Conv2d(3, 3, (1, 1)),
-		    nn.ReflectionPad2d((1, 1, 1, 1)),
-		    nn.Conv2d(3, 64, (3, 3)),
-		    nn.ReLU(),  # relu1-1
-		    nn.ReflectionPad2d((1, 1, 1, 1)),
-		    nn.Conv2d(64, 64, (3, 3)),
-		    nn.ReLU(),  # relu1-2
-		    nn.MaxPool2d((2, 2), (2, 2), (0, 0), ceil_mode=True),
-		    nn.ReflectionPad2d((1, 1, 1, 1)),
-		    nn.Conv2d(64, 128, (3, 3)),
-		    nn.ReLU(),  # relu2-1
-		    nn.ReflectionPad2d((1, 1, 1, 1)),
-		    nn.Conv2d(128, 128, (3, 3)),
-		    nn.ReLU(),  # relu2-2
-		    nn.MaxPool2d((2, 2), (2, 2), (0, 0), ceil_mode=True),
-		    nn.ReflectionPad2d((1, 1, 1, 1)),
-		    nn.Conv2d(128, 256, (3, 3)),
-		    nn.ReLU(),  # relu3-1
-		    nn.ReflectionPad2d((1, 1, 1, 1)),
-		    nn.Conv2d(256, 256, (3, 3)),
-		    nn.ReLU(),  # relu3-2
-		    nn.ReflectionPad2d((1, 1, 1, 1)),
-		    nn.Conv2d(256, 256, (3, 3)),
-		    nn.ReLU(),  # relu3-3
-		    nn.ReflectionPad2d((1, 1, 1, 1)),
-		    nn.Conv2d(256, 256, (3, 3)),
-		    nn.ReLU(),  # relu3-4
-		    nn.MaxPool2d((2, 2), (2, 2), (0, 0), ceil_mode=True),
-		    nn.ReflectionPad2d((1, 1, 1, 1)),
-		    nn.Conv2d(256, 512, (3, 3)),
-		    nn.ReLU(),  # relu4-1, this is the last layer used
-		    nn.ReflectionPad2d((1, 1, 1, 1)),
-		    nn.Conv2d(512, 512, (3, 3)),
-		    nn.ReLU(),  # relu4-2
-		    nn.ReflectionPad2d((1, 1, 1, 1)),
-		    nn.Conv2d(512, 512, (3, 3)),
-		    nn.ReLU(),  # relu4-3
-		    nn.ReflectionPad2d((1, 1, 1, 1)),
-		    nn.Conv2d(512, 512, (3, 3)),
-		    nn.ReLU(),  # relu4-4
-		    nn.MaxPool2d((2, 2), (2, 2), (0, 0), ceil_mode=True),
-		    nn.ReflectionPad2d((1, 1, 1, 1)),
-		    nn.Conv2d(512, 512, (3, 3)),
-		    nn.ReLU(),  # relu5-1
-		    nn.ReflectionPad2d((1, 1, 1, 1)),
-		    nn.Conv2d(512, 512, (3, 3)),
-		    nn.ReLU(),  # relu5-2
-		    nn.ReflectionPad2d((1, 1, 1, 1)),
-		    nn.Conv2d(512, 512, (3, 3)),
-		    nn.ReLU(),  # relu5-3
-		    nn.ReflectionPad2d((1, 1, 1, 1)),
-		    nn.Conv2d(512, 512, (3, 3)),
-		    nn.ReLU()  # relu5-4
+			nn.Conv2d(3, 3, (1, 1)),
+			nn.ReflectionPad2d((1, 1, 1, 1)),
+			nn.Conv2d(3, 64, (3, 3)),
+			nn.ReLU(),  # relu1-1
+			nn.ReflectionPad2d((1, 1, 1, 1)),
+			nn.Conv2d(64, 64, (3, 3)),
+			nn.ReLU(),  # relu1-2
+			nn.MaxPool2d((2, 2), (2, 2), (0, 0), ceil_mode=True),
+			nn.ReflectionPad2d((1, 1, 1, 1)),
+			nn.Conv2d(64, 128, (3, 3)),
+			nn.ReLU(),  # relu2-1
+			nn.ReflectionPad2d((1, 1, 1, 1)),
+			nn.Conv2d(128, 128, (3, 3)),
+			nn.ReLU(),  # relu2-2
+			nn.MaxPool2d((2, 2), (2, 2), (0, 0), ceil_mode=True),
+			nn.ReflectionPad2d((1, 1, 1, 1)),
+			nn.Conv2d(128, 256, (3, 3)),
+			nn.ReLU(),  # relu3-1
+			nn.ReflectionPad2d((1, 1, 1, 1)),
+			nn.Conv2d(256, 256, (3, 3)),
+			nn.ReLU(),  # relu3-2
+			nn.ReflectionPad2d((1, 1, 1, 1)),
+			nn.Conv2d(256, 256, (3, 3)),
+			nn.ReLU(),  # relu3-3
+			nn.ReflectionPad2d((1, 1, 1, 1)),
+			nn.Conv2d(256, 256, (3, 3)),
+			nn.ReLU(),  # relu3-4
+			nn.MaxPool2d((2, 2), (2, 2), (0, 0), ceil_mode=True),
+			nn.ReflectionPad2d((1, 1, 1, 1)),
+			nn.Conv2d(256, 512, (3, 3)),
+			nn.ReLU(),  # relu4-1, this is the last layer used
+			nn.ReflectionPad2d((1, 1, 1, 1)),
+			nn.Conv2d(512, 512, (3, 3)),
+			nn.ReLU(),  # relu4-2
+			nn.ReflectionPad2d((1, 1, 1, 1)),
+			nn.Conv2d(512, 512, (3, 3)),
+			nn.ReLU(),  # relu4-3
+			nn.ReflectionPad2d((1, 1, 1, 1)),
+			nn.Conv2d(512, 512, (3, 3)),
+			nn.ReLU(),  # relu4-4
+			nn.MaxPool2d((2, 2), (2, 2), (0, 0), ceil_mode=True),
+			nn.ReflectionPad2d((1, 1, 1, 1)),
+			nn.Conv2d(512, 512, (3, 3)),
+			nn.ReLU(),  # relu5-1
+			nn.ReflectionPad2d((1, 1, 1, 1)),
+			nn.Conv2d(512, 512, (3, 3)),
+			nn.ReLU(),  # relu5-2
+			nn.ReflectionPad2d((1, 1, 1, 1)),
+			nn.Conv2d(512, 512, (3, 3)),
+			nn.ReLU(),  # relu5-3
+			nn.ReflectionPad2d((1, 1, 1, 1)),
+			nn.Conv2d(512, 512, (3, 3)),
+			nn.ReLU()  # relu5-4
 		)
 		self.features.load_state_dict(
-		    torch.load("./models/checkpoints/vgg_normalised.pth",
-		               weights_only=True,
-		               map_location='cpu'))
+			torch.load("./models/checkpoints/vgg_normalised.pth", weights_only=True,
+					   map_location='cpu'))
 
 
 # 构造预训练的 VGG 编码器
 # pretrained_vgg = models.vgg19(weights=models.VGG19_Weights.DEFAULT).eval()
 pretrained_vgg = Encoder()
 pretrained_vgg_features = pretrained_vgg.features[:(
-    max(*list(content_feature_args.keys()), *list(style_feature_args.keys())) +
-    1)]
+	max(*list(content_feature_args.keys()), *list(style_feature_args.keys())) +
+	1)]
 
-for param in pretrained_vgg_features.parameters():
+for param in pretrained_vgg.parameters():
 	param.requires_grad = False
 
 decoder = nn.Sequential(
-    nn.ReflectionPad2d((1, 1, 1, 1)),
-    nn.Conv2d(512, 256, (3, 3)),
-    nn.ReLU(),
-    nn.Upsample(scale_factor=2, mode='nearest'),
-    nn.ReflectionPad2d((1, 1, 1, 1)),
-    nn.Conv2d(256, 256, (3, 3)),
-    nn.ReLU(),
-    nn.ReflectionPad2d((1, 1, 1, 1)),
-    nn.Conv2d(256, 256, (3, 3)),
-    nn.ReLU(),
-    nn.ReflectionPad2d((1, 1, 1, 1)),
-    nn.Conv2d(256, 256, (3, 3)),
-    nn.ReLU(),
-    nn.ReflectionPad2d((1, 1, 1, 1)),
-    nn.Conv2d(256, 128, (3, 3)),
-    nn.ReLU(),
-    nn.Upsample(scale_factor=2, mode='nearest'),
-    nn.ReflectionPad2d((1, 1, 1, 1)),
-    nn.Conv2d(128, 128, (3, 3)),
-    nn.ReLU(),
-    nn.ReflectionPad2d((1, 1, 1, 1)),
-    nn.Conv2d(128, 64, (3, 3)),
-    nn.ReLU(),
-    nn.Upsample(scale_factor=2, mode='nearest'),
-    nn.ReflectionPad2d((1, 1, 1, 1)),
-    nn.Conv2d(64, 64, (3, 3)),
-    nn.ReLU(),
-    nn.ReflectionPad2d((1, 1, 1, 1)),
-    nn.Conv2d(64, 3, (3, 3)),
+	nn.ReflectionPad2d((1, 1, 1, 1)),
+	nn.Conv2d(512, 256, (3, 3)),
+	nn.ReLU(),
+	nn.Upsample(scale_factor=2, mode='nearest'),
+	nn.ReflectionPad2d((1, 1, 1, 1)),
+	nn.Conv2d(256, 256, (3, 3)),
+	nn.ReLU(),
+	nn.ReflectionPad2d((1, 1, 1, 1)),
+	nn.Conv2d(256, 256, (3, 3)),
+	nn.ReLU(),
+	nn.ReflectionPad2d((1, 1, 1, 1)),
+	nn.Conv2d(256, 256, (3, 3)),
+	nn.ReLU(),
+	nn.ReflectionPad2d((1, 1, 1, 1)),
+	nn.Conv2d(256, 128, (3, 3)),
+	nn.ReLU(),
+	nn.Upsample(scale_factor=2, mode='nearest'),
+	nn.ReflectionPad2d((1, 1, 1, 1)),
+	nn.Conv2d(128, 128, (3, 3)),
+	nn.ReLU(),
+	nn.ReflectionPad2d((1, 1, 1, 1)),
+	nn.Conv2d(128, 64, (3, 3)),
+	nn.ReLU(),
+	nn.Upsample(scale_factor=2, mode='nearest'),
+	nn.ReflectionPad2d((1, 1, 1, 1)),
+	nn.Conv2d(64, 64, (3, 3)),
+	nn.ReLU(),
+	nn.ReflectionPad2d((1, 1, 1, 1)),
+	nn.Conv2d(64, 3, (3, 3)),
 )
-
-
 # 解码器
 class Decoder(nn.Module):
 
@@ -235,20 +236,17 @@ class Decoder(nn.Module):
 
 		return x
 
-
-def calc_gram_matrix(x: torch.Tensor):
+def calc_gram_matrix(x:torch.Tensor):
 	# input_tensor: N x C x W x H
 	N, C, W, H = x.size()
-
+	
 	# 展平通道
 	input_flattened = x.view(N, C, -1)  # N x C x (W*H)
-
+	
 	# 计算 Gram 矩阵
-	gram_matrices = torch.bmm(input_flattened, input_flattened.transpose(
-	    1, 2)) / (H * W)  # N x C x C
-
+	gram_matrices = torch.bmm(input_flattened, input_flattened.transpose(1, 2)) / (H*W) # N x C x C
+	
 	return gram_matrices
-
 
 def compute_mean_std(x: torch.Tensor):
 	if x.dim() == 3:
@@ -259,123 +257,6 @@ def compute_mean_std(x: torch.Tensor):
 	std_x = std_x.view(N, C, 1, 1)
 	mean_x = x.view(N, C, -1).mean(dim=2).view(N, C, 1, 1)
 	return mean_x, std_x
-
-
-def InstanceNorm(x):
-	mean, std = compute_mean_std(x)
-	return (x - mean) / std
-
-
-def get_key(feature):
-	key_layer = style_feature_args.keys()
-	total_layer = style_feature_args.keys()
-	keys = {}
-	for i in key_layer:
-		results = []
-		for j in total_layer:
-			results.append(
-			    InstanceNorm(
-			        nn.functional.interpolate(feature[j],
-			                                  size=feature[i].shape[-2:])))
-			if (j == i):
-				break
-		keys[i] = torch.cat(results, dim=1)
-	return keys
-
-
-max_sample = 64 * 64
-
-
-def AttN(style_hat, content_hat):
-	key_style = get_key(style_hat)
-	key_content = get_key(content_hat)
-	value_style = style_hat
-	AttN_hat = {}
-	for i in style_feature_args.keys():
-		k_s = key_style[i].view(key_style[i].shape[0], -1,
-		                        key_style[i].shape[2] * key_style[i].shape[3])
-		k_c = key_content[i].view(
-		    key_content[i].shape[0], -1,
-		    key_content[i].shape[2] * key_content[i].shape[3])
-		k_c = k_c.permute(0, 2, 1).contiguous()
-		# attention = torch.matmul(k_s, k_c)
-		v_s = value_style[i].view(
-		    value_style[i].shape[0], -1,
-		    value_style[i].shape[2] * value_style[i].shape[3])
-		if k_s.shape[-1] > max_sample:
-			idx = torch.randperm(k_s.shape[-1]).to(k_s.device)[:max_sample]
-			k_s = k_s[:, :, idx]
-			v_s = v_s[:, :, idx]
-			v_s = v_s.permute(0, 2, 1).contiguous()
-		else:
-			v_s = v_s.permute(0, 2, 1).contiguous()
-		attn = torch.matmul(k_c, k_s)
-		attn = torch.softmax(attn, dim=-1)
-		mean = torch.matmul(attn, v_s)
-		std = torch.sqrt(torch.relu(torch.bmm(attn, v_s**2) - mean**2))
-		mean = mean.view(1, key_content[i].shape[2], key_content[i].shape[3],
-		                 -1).permute(0, 3, 1, 2).contiguous()
-		std = std.view(1, key_content[i].shape[2], key_content[i].shape[3],
-		               -1).permute(0, 3, 1, 2).contiguous()
-		# mean, std = get_std_mean(style_hat[i])
-		AttN_hat[i] = std * InstanceNorm(content_hat[i]) + mean
-		# AttN_hat[i] = calc_gram_matrix(AttN_hat[i])
-	return AttN_hat
-
-
-class AdaAttN(nn.Module):
-
-	def __init__(self, in_planes, key_planes=None):
-		super(AdaAttN, self).__init__()
-		if key_planes is None:
-			key_planes = in_planes
-		self.f = nn.Conv2d(key_planes, key_planes, (1, 1))
-		self.g = nn.Conv2d(key_planes, key_planes, (1, 1))
-		self.h = nn.Conv2d(in_planes, in_planes, (1, 1))
-
-	def forward(self, content, style, content_key, style_key):
-		FF = self.f(content_key)
-		G = self.g(style_key)
-		H = self.h(style)
-		b, _, h_g, w_g = G.size()
-		G = G.view(b, -1, w_g * h_g).contiguous()
-		if w_g * h_g > max_sample:
-			index = torch.randperm(w_g * h_g).to(
-			    content.device)[:self.max_sample]
-			G = G[:, :, index]
-			v_s = H.view(b, -1, w_g * h_g)[:, :, index]
-			v_s = v_s.transpose(1, 2).contiguous()
-		else:
-			v_s = H.view(b, -1, w_g * h_g).transpose(1, 2).contiguous()
-		b, _, h, w = FF.size()
-		FF = FF.view(b, -1, w * h).permute(0, 2, 1)
-		S = torch.matmul(FF, G)
-		S = torch.softmax(S, dim=-1)
-		mean = torch.matmul(S, v_s)
-		std = torch.sqrt(torch.relu(torch.matmul(S, v_s**2) - mean**2))
-		mean = mean.view(b, h, w, -1).permute(0, 3, 1, 2).contiguous()
-		std = std.view(b, h, w, -1).permute(0, 3, 1, 2).contiguous()
-		return std * InstanceNorm(content) + mean
-
-
-class Transformer(nn.Module):
-
-	def __init__(self, in_planes, key_planes=None, shallow_layer=False):
-		super(Transformer, self).__init__()
-		self.attn4 = AdaAttN(in_planes=in_planes, key_planes=960)
-		self.attn5 = AdaAttN(in_planes=in_planes, key_planes=1472)
-		self.upsample5 = nn.Upsample(scale_factor=2, mode='nearest')
-		self.pad = nn.ReflectionPad2d(1)
-		self.conv = nn.Conv2d(in_planes, in_planes, (3, 3))
-
-	def forward(self, content4_1, style4_1, content5_1, style5_1,
-	            content4_1_key, style4_1_key, content5_1_key, style5_1_key):
-		return self.conv(
-		    self.pad(
-		        self.attn4(content4_1, style4_1, content4_1_key, style4_1_key)
-		        + self.upsample5(
-		            self.attn5(content5_1, style5_1, content5_1_key,
-		                       style5_1_key))))
 
 
 def AdaIN(x: torch.Tensor, y: torch.Tensor):
@@ -444,104 +325,54 @@ def get_feature(x, feature=pretrained_vgg_features):
 	return content_feature[30], style_feature
 
 
-class Model(nn.Module):
+def calcul_loss(decoder,
+				contents,
+				styles,
+				criterion,
+				device,
+				lamda=10,
+				feature=pretrained_vgg_features):
 
-	def __init__(self, encoder, device):
-		super(Model, self).__init__()
-		self.decoder = Decoder().to(device)
-		self.transformer = Transformer(512, 512).to(device)
-		self.encoder = encoder
-		self.dev = device
+	# transform = transforms.Compose([
+	#     transforms.Normalize(mean=[0.485, 0.456, 0.406],
+	#                          std=[0.229, 0.224, 0.225])  # 归一化
+	# ])
+	contents_image, contents_feature = get_feature(contents, feature)
+	styles_image, styles_feature = get_feature(styles, feature)
 
-	def forward(self, x):
-		content_feature, style_feature = get_feature(x)
-		content_key = get_key(content_feature)
-		style_key = get_key(style_feature)
-		Mix_feature = self.transformer(content_feature[30], style_feature[30],
-		                               content_feature[43], style_feature[43],
-		                               content_key[30], style_key[30])
-		Mix_image = self.decoder(Mix_feature)
-		return Mix_image
+	Mix_feature = AdaIN(contents_image, styles_image)
 
-	def generate(self, content, style):
-		contents_image, contents_feature = get_feature(content, self.encoder)
-		styles_image, styles_feature = get_feature(style, self.encoder)
-		content_key = get_key(contents_feature)
-		style_key = get_key(styles_feature)
+	Mix_image = decoder(Mix_feature)
+	#Mix_image = transform(Mix_image)
 
-		# Mix_feature = AdaIN(contents_image, styles_image)
-		Mix_feature = self.transformer(contents_feature[30],
-		                               styles_feature[30],
-		                               contents_feature[43],
-		                               styles_feature[43], content_key[30],
-		                               style_key[30], content_key[43],
-		                               style_key[43])
+	AdaIN_content, AdaIN_feature = get_feature(Mix_image)
 
-		Mix_image = self.decoder(Mix_feature)
+	Loss_c = criterion(AdaIN_content, Mix_feature)
+	# Loss_c = criterion(AdaIN_content, contents_image)
 
-		return Mix_image
+	Loss_s = torch.tensor(0.0, requires_grad=True).to(device)
 
-	def forward(self, contents, styles):
+	for i in style_feature_args.keys():
+		# mean_style = torch.mean(styles_feature[i], dim=[-2, -1], keepdim=True)
+		# mean_AdaIN = torch.mean(AdaIN_feature[i], dim=[-2, -1], keepdim=True)
+		# std_style = torch.std(styles_feature[i], dim=[-2, -1], keepdim=True)
+		# std_AdaIN = torch.std(AdaIN_feature[i], dim=[-2, -1], keepdim=True)
+		mean_style, std_style = compute_mean_std(styles_feature[i])
+		mean_AdaIN, std_AdaIN = compute_mean_std(AdaIN_feature[i])
+		Loss_s = Loss_s +criterion(
+			mean_style, mean_AdaIN) +criterion(
+				std_style, std_AdaIN)
+		# gram_style = calc_gram_matrix(styles_feature[i])
+		# gram_AdaIN = calc_gram_matrix(AdaIN_feature[i])
+		# Loss_s = Loss_s + torch.mean((gram_style - gram_AdaIN)**2)
 
-		# transform = transforms.Compose([
-		#     transforms.Normalize(mean=[0.485, 0.456, 0.406],
-		#                          std=[0.229, 0.224, 0.225])  # 归一化
-		# ])
-		contents_image, contents_feature = get_feature(contents, self.encoder)
-		styles_image, styles_feature = get_feature(styles, self.encoder)
-		content_key = get_key(contents_feature)
-		style_key = get_key(styles_feature)
-
-		# Mix_feature = AdaIN(contents_image, styles_image)
-		Mix_feature = self.transformer(
-		    contents_feature[30],
-		    styles_feature[30],
-		    contents_feature[43],
-		    styles_feature[43],
-		    content_key[30],
-		    style_key[30],
-		    content_key[43],
-		    style_key[43],
-		)
-
-		Mix_image = self.decoder(Mix_feature)
-		#Mix_image = transform(Mix_image)
-
-		Mix_content, Mix_style = get_feature(Mix_image)
-
-		Loss_c = torch.tensor(0.0, requires_grad=True).to(self.dev)
-
-		# Loss_c = criterion(Mix_feature, contents_feature)
-		for i in content_feature_args.keys():
-			Loss_c = Loss_c + content_feature_args[i] * torch.mean(
-			    (InstanceNorm(Mix_style[i]) -
-			     InstanceNorm(contents_feature[i]))**2)
-
-		# Loss_c = criterion(AdaIN_content, contents_image)
-
-		Loss_gs = torch.tensor(0.0, requires_grad=True).to(self.dev)
-
-		for i in style_feature_args.keys():
-			if i == 43:
-				break
-			s_mean, s_std = compute_mean_std(styles_feature[i])
-			m_mean, m_std = compute_mean_std(Mix_style[i])
-			Loss_gs = Loss_gs + F.mse_loss(s_mean, m_mean) + F.mse_loss(
-			    s_std, m_std)
-
-		Loss_ls = torch.tensor(0.0, requires_grad=True).to(self.dev)
-		attn_hat = AttN(styles_feature, contents_feature)
-		for i in style_feature_args.keys():
-			if i == 43:
-				break
-			Loss_ls = Loss_ls + F.mse_loss(Mix_style[i], attn_hat[i])
-
-		return Loss_c, 10 * Loss_gs, 3 * Loss_ls
+	return Loss_c, lamda * Loss_s
 
 
 def train():
 
 	# 构造解码器
+	decoder = Decoder()
 	#encoder = Encoder(pretrained_model=pretrained_vgg)
 
 	# if torch.cuda.is_available():
@@ -552,7 +383,7 @@ def train():
 	# 	print('Running on CPU')
 
 	local_rank = int(os.environ['LOCAL_RANK'])
-	os.environ['VISIBLE_DEVICES'] = '0,1,2,3'
+	os.environ['VISIBLE_DEVICES'] = '0,1,2,3,4,5'
 
 	seed = 6666
 	random.seed(seed)
@@ -564,59 +395,65 @@ def train():
 	torch.distributed.init_process_group(backend='nccl')
 
 	pretrained_vgg_features.to(device)
-	model = Model(pretrained_vgg_features, device)
-	model = DDP(model, device_ids=[local_rank], output_device=local_rank)
 
 	transform = transforms.Compose([
-	    transforms.Resize((512, 512)),  # 调整图像大小
-	    transforms.RandomCrop((256, 256)),  # 随机裁剪至 (256, 256)
-	    transforms.ToTensor(),  # 转换为Tensor
-	    # transforms.Normalize(mean=[0.485, 0.456, 0.406],
-	    #                      std=[0.229, 0.224, 0.225])  # 归一化
+		transforms.Resize((512, 512)),  # 调整图像大小
+		transforms.RandomCrop((256, 256)),  # 随机裁剪至 (256, 256)
+		transforms.ToTensor(),  # 转换为Tensor
+		# transforms.Normalize(mean=[0.485, 0.456, 0.406],
+		#                      std=[0.229, 0.224, 0.225])  # 归一化
 	])
 
-	content_dataset = FlatFolderDataset(root='./data/content',
-	                                    transform=transform)
-	style_dataset = FlatFolderDataset(root='./data/style', transform=transform)
+	content_dataset = FlatFolderDataset(root='/root/autodl-tmp/train2017',
+										transform=transform)
+	style_dataset = FlatFolderDataset(root='./images/inputs/style',
+									  transform=transform)
 
 	content_style_dataset = ContentStyleDataset(content_dataset, style_dataset)
 
 	train_sampler = DistributedSampler(content_style_dataset)
 
 	train_loader = data.DataLoader(content_style_dataset,
-	                               batch_size=8,
-	                               num_workers=16,
-	                               sampler=train_sampler)
+								   batch_size=32,
+								   num_workers=16,
+								   sampler=train_sampler)
 
 	criterion = nn.MSELoss()
-	optimizer = torch.optim.Adam(decoder.parameters(), lr=1e-4)
+	optimizer = torch.optim.Adam(decoder.parameters(),
+								  lr=1e-4
+								  )
+	# scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer,
+	#                                                                  T_0=21,
+	#                                                                  T_mult=2)
+	decoder = DDP(decoder.cuda(local_rank),
+				  device_ids=[local_rank],
+				  output_device=local_rank)
 
 	writer = SummaryWriter('./loss_curve')
 	num_epochs = 300
-	model.train()  # 设置解码器为训练模式
-	model.to(device)
+	decoder.train()  # 设置解码器为训练模式
+	decoder.to(device)
 	for epoch in range(num_epochs):
 		total_loss = 0
 		total_loss_c = 0
-		total_loss_g = 0
-		total_loss_l = 0
+		total_loss_s = 0
 		total_tmp_loss_c = 0
-		total_tmp_loss_g = 0
-		total_tmp_loss_l = 0
+		total_tmp_loss_s = 0
 		total_tmp_loss = 0
 
 		for batch_idx, (content_images,
-		                style_images) in enumerate(tqdm(train_loader)):
+						style_images) in enumerate(tqdm(train_loader)):
+
 
 			content_images = content_images.to(device)
 			style_images = style_images.to(device)
 
 			# 计算损失
-			loss_c, loss_g, loss_l = model(content_images, style_images)
-			loss = loss_c + loss_g + loss_l
+			loss_c, loss_s = calcul_loss(decoder, content_images, style_images,
+										 criterion, device)
+			loss = loss_c + loss_s
 			total_loss_c += loss_c.item()
-			total_loss_g += loss_g.item()
-			total_loss_l += loss_l.item()
+			total_loss_s += loss_s.item()
 			optimizer.zero_grad()
 			# 反向传播和优化
 			loss.backward()
@@ -632,17 +469,15 @@ def train():
 			if batch_idx % 100 == 0 and local_rank == 0:
 				loss_delta = total_loss - total_tmp_loss
 				loss_delta_c = total_loss_c - total_tmp_loss_c
-				loss_delta_g = total_loss_g - total_tmp_loss_g
-				loss_delta_l = total_loss_l - total_tmp_loss_l
+				loss_delta_s = total_loss_s - total_tmp_loss_s
 				total_tmp_loss = total_loss
 				total_tmp_loss_c = total_loss_c
-				total_tmp_loss_g = total_loss_g
-				total_tmp_loss_l = total_loss_l
+				total_tmp_loss_s = total_loss_s
 				print(
-				    f'Epoch [{epoch+1}/{num_epochs}], Step [{batch_idx+1}/{len(train_loader)}], Loss_c: {loss_delta_c/100:.4f}, Loss_g: {loss_delta_g/100:.4f}, Loss_l: {loss_delta_l/100:.4f}'
+					f'Epoch [{epoch+1}/{num_epochs}], Step [{batch_idx+1}/{len(train_loader)}], Loss_c: {loss_delta_c/100:.4f}, Loss_s: {loss_delta_s/100:.4f}'
 				)
 				writer.add_scalars('Loss', {'train': loss_delta},
-				                   epoch * len(train_loader) + batch_idx)
+								   epoch * len(train_loader) + batch_idx)
 
 		# total_loss = total_loss / len(train_loader)
 		# writer.add_scalars('loss', {'train': total_loss}, epoch)
@@ -654,8 +489,8 @@ def train():
 			if not os.path.exists(checkpoints_dir):
 				os.makedirs(checkpoints_dir)
 			torch.save(
-			    decoder.state_dict(),
-			    f'{checkpoints_dir}/decoder_epoch_{epoch+1}_{timestamp}.pth')
+				decoder.state_dict(),
+				f'{checkpoints_dir}/decoder_epoch_{epoch+1}_{timestamp}.pth')
 
 
 if __name__ == '__main__':
